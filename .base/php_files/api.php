@@ -73,7 +73,7 @@ function getSettings() {
             'address'         => 'Main Market Road',
             'currency_symbol' => '₹',
             'logo_type'       => 'icon',
-            'logo_icon'       => '🖥️',
+            'logo_icon'       => 'fa-solid fa-desktop',
             'logo_url'        => ''
         ];
     }
