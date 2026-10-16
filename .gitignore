@@ -1,0 +1,5 @@
+# Ignore all customer data folders and files in root
+/*
+!.gitignore
+!/.base/
+!/.base/**
