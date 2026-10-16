@@ -2,5 +2,7 @@
 /*
 !.gitignore
 !/README.md
+!/index.php
+!/run.bat
 !/.base/
 !/.base/**
