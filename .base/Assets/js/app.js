@@ -1,6 +1,6 @@
 /**
  * Internet Cafe Diary — Frontend Application JS
- * Uses Font Awesome Vector Icons (No Emojis)
+ * Handles: Navigation, CRUD Calls, System Manager, DataTables, Offline Assets, Document Management
  */
 
 // ══════════════════════════════════════════════════════════════
@@ -18,6 +18,9 @@ let state = {
   customers: [],
   sessions: [],
   folders: [],
+  allDocuments: [],
+  docDataTable: null,
+  docViewMode: 'table',
   stats: {},
   settings: null,
   selectedCustomer: null,
@@ -55,6 +58,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (state.page === 'customers') {
       state.filters.search = q;
       renderCustomers();
+    } else if (state.page === 'documents' && state.docDataTable) {
+      state.docDataTable.search(q).draw();
     }
   });
 
@@ -75,6 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initFilters();
   initSettingsForms();
   initDirectoryForm();
+  initDocumentForms();
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -97,7 +103,6 @@ function applySettings(settings) {
   if (!settings || !settings.general) return;
   const g = settings.general;
 
-  // Header and Sidebar Title
   const iconClass = (g.logo_icon && g.logo_icon.startsWith('fa-')) ? g.logo_icon : 'fa-solid fa-desktop';
   const topTitle = document.getElementById('topHeaderTitle');
   if (topTitle) {
@@ -119,19 +124,16 @@ function applySettings(settings) {
     }
   }
 
-  // Owner Name
   const ownerEl = document.getElementById('sidebarOwnerName');
   if (ownerEl) ownerEl.textContent = g.owner_name || 'Admin';
 
   const avatarEl = document.getElementById('sidebarUserAvatar');
   if (avatarEl) avatarEl.textContent = (g.owner_name || 'A').charAt(0).toUpperCase();
 
-  // Currency symbols
   document.querySelectorAll('.currency-symbol').forEach(el => {
     el.textContent = g.currency_symbol || '₹';
   });
 
-  // Update page document title
   document.title = `${g.site_title || 'Internet Cafe Diary'} — Dashboard`;
 }
 
@@ -139,7 +141,6 @@ function populateStorageDirectoryDropdowns() {
   const dirs = state.settings?.storage?.directories || [];
   const activeDirs = dirs.filter(d => d.is_active !== false);
 
-  // Customer Modal Directory Select
   const custDirSelect = document.getElementById('inp-storage-dir');
   if (custDirSelect) {
     custDirSelect.innerHTML = activeDirs.map(d =>
@@ -147,14 +148,12 @@ function populateStorageDirectoryDropdowns() {
     ).join('');
   }
 
-  // Customer Filter Directory Select
   const custFilterSelect = document.getElementById('filterCustomerDir');
   if (custFilterSelect) {
     custFilterSelect.innerHTML = '<option value="">All Locations</option>' +
       dirs.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
   }
 
-  // Documents Location Select
   const docLocSelect = document.getElementById('filterDocLocation');
   if (docLocSelect) {
     docLocSelect.innerHTML = '<option value="">All Storage Locations</option>' +
@@ -181,7 +180,7 @@ function navigateTo(page) {
     dashboard: `<i class="${iconClass}"></i> ${escapeHtml(shopTitle)}`,
     customers: '<i class="fa-solid fa-users"></i> Customers',
     sessions:  '<i class="fa-solid fa-clock"></i> Sessions',
-    documents: '<i class="fa-solid fa-folder-open"></i> Documents Multi-Directory',
+    documents: '<i class="fa-solid fa-folder-open"></i> Documents Manager',
     reports:   '<i class="fa-solid fa-chart-line"></i> Reports',
     settings:  '<i class="fa-solid fa-gear"></i> System Manager'
   };
@@ -270,6 +269,13 @@ async function loadDashboard() {
 function updateCustomerBadge(count) {
   const badge = document.getElementById('badge-customers');
   if (badge) badge.textContent = count;
+}
+
+function updateDocumentBadge(count) {
+  const badge = document.getElementById('badge-documents');
+  if (badge) badge.textContent = count;
+  const countEl = document.getElementById('docs-total-count');
+  if (countEl) countEl.textContent = `(${count})`;
 }
 
 function renderDashStats(s) {
@@ -487,12 +493,24 @@ async function viewCustomer(id) {
   document.getElementById('customers-list-view').classList.add('hidden');
   document.getElementById('customers-detail-view').classList.remove('hidden');
 
+  const targetDirId = c.storage_dir_id || 'dir_root';
+  const targetDir = (state.settings?.storage?.directories || []).find(d => d.id === targetDirId);
+  const basePath = targetDir ? targetDir.path : '';
+  const customerFolderFullPath = basePath ? (basePath.replace(/[\\\/]$/, '') + '\\' + c.folder_name) : '';
+
   const docs = (c.documents||[]).map(d => {
-    const ext  = d.split('.').pop().toLowerCase();
+    const ext = d.split('.').pop().toLowerCase();
     const icon = getFileIconHtml(ext);
+    const fullPath = customerFolderFullPath ? (customerFolderFullPath + '\\' + d) : '';
+
     return `<div class="doc-item" title="${escapeHtml(d)}">
-      <div class="doc-icon">${icon}</div>
-      <div class="doc-name">${escapeHtml(d)}</div>
+      <div class="doc-icon" onclick="previewDocument('${escapeJsString(fullPath)}','${escapeJsString(d)}','${ext}')" style="cursor:pointer;">${icon}</div>
+      <div class="doc-name" onclick="previewDocument('${escapeJsString(fullPath)}','${escapeJsString(d)}','${ext}')" style="cursor:pointer;">${escapeHtml(d)}</div>
+      <div class="flex items-center justify-center gap-2 mt-4">
+        <button class="btn btn-xs btn-secondary" onclick="openRenameDocModal('${escapeJsString(fullPath)}','${escapeJsString(d)}')" title="Rename"><i class="fa-solid fa-pen-to-square"></i></button>
+        <button class="btn btn-xs btn-secondary" onclick="downloadDocument('${escapeJsString(fullPath)}')" title="Download"><i class="fa-solid fa-download"></i></button>
+        <button class="btn btn-xs btn-danger" onclick="deleteDocument('${escapeJsString(fullPath)}','${escapeJsString(d)}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+      </div>
     </div>`;
   }).join('');
 
@@ -517,7 +535,8 @@ async function viewCustomer(id) {
         </div>
       </div>
       <div style="margin-left:auto;">
-        <button class="btn btn-primary btn-sm" onclick="openSessionModal('${c.id}','${escapeHtml(c.name)}')"><i class="fa-solid fa-plus"></i> Add Session</button>
+        <button class="btn btn-primary btn-sm" onclick="openUploadDocModal('${c.id}')"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Doc</button>
+        <button class="btn btn-secondary btn-sm mt-4" onclick="openSessionModal('${c.id}','${escapeHtml(c.name)}')"><i class="fa-solid fa-plus"></i> Add Session</button>
         <button class="btn btn-secondary btn-sm mt-4" onclick="editCustomer('${c.id}')"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
       </div>
     </div>
@@ -529,11 +548,12 @@ async function viewCustomer(id) {
       ${c.notes ? `<div class="detail-field" style="grid-column:1/-1"><label>Notes</label><p>${escapeHtml(c.notes)}</p></div>` : ''}
     </div>
     <div class="card mb-4">
-      <div class="card-header"><h3><i class="fa-solid fa-folder-open"></i> Documents (${(c.documents||[]).length})</h3>
-        <small class="text-muted">Folder: <code>${escapeHtml(c.folder_name)}</code></small>
+      <div class="card-header">
+        <h3><i class="fa-solid fa-folder-open"></i> Customer Documents (${(c.documents||[]).length})</h3>
+        <button class="btn btn-sm btn-primary" onclick="openUploadDocModal('${c.id}')"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</button>
       </div>
       <div class="card-body">
-        ${docs ? `<div class="docs-grid">${docs}</div>` : '<p class="text-muted text-sm">No documents stored</p>'}
+        ${docs ? `<div class="docs-grid">${docs}</div>` : '<p class="text-muted text-sm">No documents stored for this customer.</p>'}
       </div>
     </div>
     <div class="card">
@@ -718,26 +738,107 @@ async function deleteSession(id) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// DOCUMENTS (MULTI-DIRECTORY SCAN)
+// DOCUMENTS (DATATABLES & FULL CRUD)
 // ══════════════════════════════════════════════════════════════
 async function loadDocuments() {
-  showLoading('documents-grid');
   try {
-    const [custRes, foldRes] = await Promise.all([
-      apiGet('customers'),
+    const [docsRes, foldRes] = await Promise.all([
+      apiGet('documents'),
       apiGet('folders')
     ]);
 
-    state.customers = custRes.data || [];
-    state.folders   = foldRes.data || [];
+    state.allDocuments = docsRes.data || [];
+    state.folders      = foldRes.data || [];
 
-    renderDocuments();
+    updateDocumentBadge(state.allDocuments.length);
+    renderDocumentsDataTable();
+    renderDocumentsFolderGrid();
   } catch(e) {
     toast('Failed to load documents', 'error');
   }
 }
 
-function renderDocuments() {
+function switchDocViewMode(mode) {
+  state.docViewMode = mode;
+  const tableContainer = document.getElementById('documents-table-container');
+  const gridContainer  = document.getElementById('documents-grid-container');
+  const tableBtn       = document.getElementById('viewModeTableBtn');
+  const gridBtn        = document.getElementById('viewModeGridBtn');
+
+  if (mode === 'table') {
+    tableContainer?.classList.remove('hidden');
+    gridContainer?.classList.add('hidden');
+    tableBtn?.classList.add('active-view');
+    gridBtn?.classList.remove('active-view');
+    if (state.docDataTable) state.docDataTable.columns.adjust().draw();
+  } else {
+    tableContainer?.classList.add('hidden');
+    gridContainer?.classList.remove('hidden');
+    tableBtn?.classList.remove('active-view');
+    gridBtn?.classList.add('active-view');
+  }
+}
+
+function renderDocumentsDataTable() {
+  let docs = [...state.allDocuments];
+  if (state.docFilters.location) {
+    docs = docs.filter(d => d.storage_id === state.docFilters.location);
+  }
+
+  // Destroy existing DataTable instance if exists
+  if (state.docDataTable && $.fn.DataTable.isDataTable('#documentsDataTable')) {
+    state.docDataTable.destroy();
+  }
+
+  const tableBody = document.querySelector('#documentsDataTable tbody');
+  if (!tableBody) return;
+
+  tableBody.innerHTML = docs.map(d => {
+    const icon = getFileIconHtml(d.ext);
+    const escapedPath = escapeJsString(d.full_path);
+    const escapedName = escapeJsString(d.name);
+
+    return `<tr>
+      <td style="text-align:center;width:40px;">${icon}</td>
+      <td>
+        <span class="td-name font-mono" style="cursor:pointer;color:var(--accent-cyan);" onclick="previewDocument('${escapedPath}','${escapedName}','${d.ext}')">
+          ${escapeHtml(d.name)}
+        </span>
+      </td>
+      <td>
+        <div class="td-name">${escapeHtml(d.customer_name)}</div>
+        <div class="text-muted text-sm font-mono">${escapeHtml(d.folder)}</div>
+      </td>
+      <td><span class="badge badge-cyan"><i class="fa-solid fa-hard-drive"></i> ${escapeHtml(d.storage_name)}</span></td>
+      <td class="font-mono td-mono">${d.size_formatted}</td>
+      <td class="font-mono text-muted text-sm">${d.modified_date}</td>
+      <td>
+        <div class="action-btns">
+          <button class="btn btn-xs btn-secondary" onclick="previewDocument('${escapedPath}','${escapedName}','${d.ext}')" title="Preview / View"><i class="fa-solid fa-eye"></i></button>
+          <button class="btn btn-xs btn-secondary" onclick="downloadDocument('${escapedPath}')" title="Download"><i class="fa-solid fa-download"></i></button>
+          <button class="btn btn-xs btn-secondary" onclick="openRenameDocModal('${escapedPath}','${escapedName}')" title="Rename"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button class="btn btn-xs btn-danger" onclick="deleteDocument('${escapedPath}','${escapedName}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Re-initialize DataTable with search, sort, and pagination
+  if (window.jQuery && $.fn.DataTable) {
+    state.docDataTable = $('#documentsDataTable').DataTable({
+      pageLength: 25,
+      lengthMenu: [10, 25, 50, 100],
+      order: [[5, 'desc']], // sort by modified date desc
+      language: {
+        search: "_INPUT_",
+        searchPlaceholder: "Search any document, customer, location...",
+        lengthMenu: "Show _MENU_ entries"
+      }
+    });
+  }
+}
+
+function renderDocumentsFolderGrid() {
   const el = document.getElementById('documents-grid');
   if (!el) return;
 
@@ -752,14 +853,23 @@ function renderDocuments() {
   }
 
   el.innerHTML = folders.map(f => {
-    const cust    = state.customers.find(c => c.folder_name === f.folder) || null;
-    const docs    = f.files || [];
+    const cust = state.customers.find(c => c.folder_name === f.folder) || null;
+    const docs = f.files || [];
     const docHtml = docs.map(d => {
-      const ext  = d.split('.').pop().toLowerCase();
+      const ext = d.split('.').pop().toLowerCase();
       const icon = getFileIconHtml(ext);
+      const fullPath = f.full_path ? (f.full_path + '\\' + d) : '';
+      const escapedPath = escapeJsString(fullPath);
+      const escapedName = escapeJsString(d);
+
       return `<div class="doc-item" title="${escapeHtml(d)}">
-        <div class="doc-icon">${icon}</div>
-        <div class="doc-name">${escapeHtml(d)}</div>
+        <div class="doc-icon" onclick="previewDocument('${escapedPath}','${escapedName}','${ext}')" style="cursor:pointer;">${icon}</div>
+        <div class="doc-name" onclick="previewDocument('${escapedPath}','${escapedName}','${ext}')" style="cursor:pointer;">${escapeHtml(d)}</div>
+        <div class="flex items-center justify-center gap-2 mt-4">
+          <button class="btn btn-xs btn-secondary" onclick="openRenameDocModal('${escapedPath}','${escapedName}')" title="Rename"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button class="btn btn-xs btn-secondary" onclick="downloadDocument('${escapedPath}')" title="Download"><i class="fa-solid fa-download"></i></button>
+          <button class="btn btn-xs btn-danger" onclick="deleteDocument('${escapedPath}','${escapedName}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+        </div>
       </div>`;
     }).join('');
 
@@ -776,7 +886,7 @@ function renderDocuments() {
         </div>
         <div class="flex items-center gap-2">
           ${cust ? `<span class="badge badge-active"><i class="fa-solid fa-check"></i> Registered</span>` : `<span class="badge badge-inactive">Unlinked</span>`}
-          <span class="text-muted text-sm font-mono" style="font-size:10px;" title="${escapeHtml(f.full_path)}">${escapeHtml(f.full_path)}</span>
+          <button class="btn btn-xs btn-primary" onclick="openUploadDocModal('${cust ? cust.id : ''}')"><i class="fa-solid fa-upload"></i> Upload</button>
         </div>
       </div>
       ${docs.length ? `<div class="card-body"><div class="docs-grid">${docHtml}</div></div>` : ''}
@@ -787,7 +897,152 @@ function renderDocuments() {
 function filterDocumentsByLocation() {
   const sel = document.getElementById('filterDocLocation');
   state.docFilters.location = sel?.value || '';
-  renderDocuments();
+  renderDocumentsDataTable();
+  renderDocumentsFolderGrid();
+}
+
+// ── DOCUMENT MODALS & ACTIONS ────────────────────────────────
+function initDocumentForms() {
+  // Upload Document Form
+  const uploadForm = document.getElementById('uploadDocForm');
+  uploadForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(uploadForm);
+    toast('Uploading document...', 'info');
+
+    try {
+      const res = await fetch(`${API}?resource=documents&action=upload`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        toast(data.message, 'success');
+        closeModal('uploadDocModal');
+        uploadForm.reset();
+        await loadDocuments();
+        if (state.selectedCustomer) viewCustomer(state.selectedCustomer.id);
+      } else {
+        toast(data.message || 'Upload failed', 'error');
+      }
+    } catch(err) {
+      toast('Upload failed to complete', 'error');
+    }
+  });
+
+  // Rename Document Form
+  const renameForm = document.getElementById('renameDocForm');
+  renameForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(renameForm));
+    toast('Renaming document...', 'info');
+
+    const res = await apiPost('documents', {
+      path: data.path,
+      new_name: data.new_name
+    }, 'rename');
+
+    if (res.success) {
+      toast(res.message, 'success');
+      closeModal('renameDocModal');
+      await loadDocuments();
+      if (state.selectedCustomer) viewCustomer(state.selectedCustomer.id);
+    } else {
+      toast(res.message || 'Rename failed', 'error');
+    }
+  });
+}
+
+function openUploadDocModal(prefillCustomerId = '') {
+  const form = document.getElementById('uploadDocForm');
+  form?.reset();
+
+  const custSelect = document.getElementById('uploadDocCustomerSelect');
+  if (custSelect) {
+    custSelect.innerHTML = '<option value="">— Select Customer —</option>' +
+      state.customers.map(c =>
+        `<option value="${c.id}" ${c.id === prefillCustomerId ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.folder_name)})</option>`
+      ).join('') +
+      '<option value="__custom__">+ Enter Custom Folder Name</option>';
+
+    custSelect.onchange = () => {
+      const isCustom = custSelect.value === '__custom__';
+      document.getElementById('uploadCustomFolderGroup').style.display = isCustom ? 'block' : 'none';
+    };
+  }
+
+  document.getElementById('uploadCustomFolderGroup').style.display = 'none';
+  openModal('uploadDocModal');
+}
+
+function previewDocument(path, name, ext) {
+  const modal = document.getElementById('docPreviewModal');
+  const title = document.getElementById('docPreviewTitle');
+  const content = document.getElementById('docPreviewContent');
+  const downloadBtn = document.getElementById('docPreviewDownloadBtn');
+  const externalBtn = document.getElementById('docPreviewExternalBtn');
+
+  if (!modal || !content) return;
+
+  const viewUrl = `${API}?resource=documents&action=view&path=${encodeURIComponent(path)}`;
+  const downloadUrl = `${API}?resource=documents&action=download&path=${encodeURIComponent(path)}`;
+
+  if (title) title.innerHTML = `<i class="fa-solid fa-file"></i> ${escapeHtml(name)}`;
+  if (downloadBtn) downloadBtn.href = downloadUrl;
+  if (externalBtn) externalBtn.href = viewUrl;
+
+  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+  if (imageExts.includes(ext.toLowerCase())) {
+    content.innerHTML = `<img src="${viewUrl}" alt="${escapeHtml(name)}">`;
+  } else if (ext.toLowerCase() === 'pdf') {
+    content.innerHTML = `<iframe src="${viewUrl}#toolbar=1" title="${escapeHtml(name)}"></iframe>`;
+  } else {
+    content.innerHTML = `
+      <div style="text-align:center;padding:40px;">
+        <div style="font-size:48px;margin-bottom:16px;">${getFileIconHtml(ext)}</div>
+        <h3>${escapeHtml(name)}</h3>
+        <p class="text-muted mt-4">Preview not available for this file type.</p>
+        <a href="${downloadUrl}" class="btn btn-primary mt-4"><i class="fa-solid fa-download"></i> Download File</a>
+      </div>
+    `;
+  }
+
+  openModal('docPreviewModal');
+}
+
+function downloadDocument(path) {
+  const downloadUrl = `${API}?resource=documents&action=download&path=${encodeURIComponent(path)}`;
+  window.open(downloadUrl, '_blank');
+}
+
+function openRenameDocModal(path, currentName) {
+  const form = document.getElementById('renameDocForm');
+  if (!form) return;
+  form.reset();
+
+  document.getElementById('renameDocPath').value = path;
+  document.getElementById('renameDocOldName').value = currentName;
+  document.getElementById('renameDocNewName').value = currentName;
+
+  openModal('renameDocModal');
+}
+
+async function deleteDocument(path, name) {
+  if (!confirm(`Are you sure you want to delete "${name}"? This file will be permanently removed from disk.`)) {
+    return;
+  }
+
+  toast('Deleting document...', 'info');
+  const res = await apiPost('documents', { path }, 'delete');
+
+  if (res.success) {
+    toast(res.message, 'success');
+    await loadDocuments();
+    if (state.selectedCustomer) viewCustomer(state.selectedCustomer.id);
+  } else {
+    toast(res.message || 'Delete failed', 'error');
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1184,6 +1439,11 @@ function escapeHtml(text) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function escapeJsString(str) {
+  if (!str) return '';
+  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
 }
 
 function getFileIconHtml(ext) {
