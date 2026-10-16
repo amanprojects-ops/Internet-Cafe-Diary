@@ -1,0 +1,457 @@
+<?php
+/**
+ * Internet Cafe Diary — Main Dashboard
+ * Place this file in: InternetCafeDiary/.base/index.php
+ * Run via PHP built-in server or XAMPP/WAMP
+ */
+
+$shopName    = 'Internet Cafe Diary';
+$ownerName   = 'Admin';
+$currentYear = date('Y');
+$today       = date('Y-m-d');
+
+// Generate year options
+$years = [];
+for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
+?>
+<!DOCTYPE html>
+<html lang="hi" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Internet Cafe Diary – Customer & Session Management System">
+  <meta name="theme-color" content="#070b14">
+  <title><?= htmlspecialchars($shopName) ?> — Dashboard</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- Dashboard CSS -->
+  <link rel="stylesheet" href="Assets/css/style.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+     APP SHELL
+     ══════════════════════════════════════════════════════════════ -->
+<div class="app-shell">
+
+  <!-- ── SIDEBAR ─────────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🖥️</div>
+      <div class="logo-text">
+        Internet Cafe
+        <span>Diary System</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Main Menu</div>
+
+      <div class="nav-item active" data-page="dashboard" id="nav-dashboard">
+        <span class="nav-icon">📊</span>
+        <span>Dashboard</span>
+      </div>
+
+      <div class="nav-item" data-page="customers" id="nav-customers">
+        <span class="nav-icon">👥</span>
+        <span>Customers</span>
+        <span class="nav-badge" id="badge-customers">0</span>
+      </div>
+
+      <div class="nav-item" data-page="sessions" id="nav-sessions">
+        <span class="nav-icon">⏱️</span>
+        <span>Sessions</span>
+      </div>
+
+      <div class="nav-section-label" style="margin-top:12px;">Files & Reports</div>
+
+      <div class="nav-item" data-page="documents" id="nav-documents">
+        <span class="nav-icon">📁</span>
+        <span>Documents</span>
+      </div>
+
+      <div class="nav-item" data-page="reports" id="nav-reports">
+        <span class="nav-icon">📈</span>
+        <span>Reports</span>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="avatar">A</div>
+        <div class="user-info">
+          <div class="name"><?= htmlspecialchars($ownerName) ?></div>
+          <div class="role">Administrator</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN CONTENT ─────────────────────────────────────────── -->
+  <div class="main-content">
+
+    <!-- TOP HEADER -->
+    <header class="top-header">
+      <button class="btn-icon" id="menuToggle" style="display:none;" aria-label="Menu">☰</button>
+      <div class="header-title">🖥️ Internet Cafe Diary</div>
+
+      <div class="header-search">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="headerSearch" placeholder="Search customers..." autocomplete="off">
+      </div>
+
+      <div class="header-actions">
+        <span class="date-display" id="dateDisplay"><?= date('D, d M Y  H:i:s') ?></span>
+        <button class="btn btn-primary btn-sm" onclick="openCustomerModal()">➕ New Customer</button>
+      </div>
+    </header>
+
+    <!-- PAGE CONTENT -->
+    <main class="page-content">
+
+      <!-- ════════════════════════════════════════════════════════
+           PAGE: DASHBOARD
+           ════════════════════════════════════════════════════════ -->
+      <section class="page active" id="page-dashboard">
+        <div class="page-header">
+          <h2>📊 Dashboard <span>Overview</span></h2>
+          <button class="btn btn-secondary btn-sm" onclick="loadDashboard()">🔄 Refresh</button>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid" id="dash-stats">
+          <div class="loading-overlay"><div class="spinner"></div></div>
+        </div>
+
+        <!-- Two column layout -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+          <!-- Recent Customers -->
+          <div class="card">
+            <div class="card-header">
+              <h3>👥 Recent Customers</h3>
+              <button class="btn btn-secondary btn-sm" onclick="navigateTo('customers')">View All →</button>
+            </div>
+            <div id="dash-recent-customers">
+              <div class="loading-overlay"><div class="spinner"></div></div>
+            </div>
+          </div>
+
+          <!-- Customers by Year Chart -->
+          <div class="card">
+            <div class="card-header">
+              <h3>📅 Customers by Year</h3>
+            </div>
+            <div class="card-body">
+              <div class="chart-container">
+                <canvas id="yearChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Sessions -->
+        <div class="card">
+          <div class="card-header">
+            <h3>⏱️ Recent Sessions</h3>
+            <button class="btn btn-secondary btn-sm" onclick="navigateTo('sessions')">View All →</button>
+          </div>
+          <div id="dash-recent-sessions">
+            <div class="loading-overlay"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           PAGE: CUSTOMERS
+           ════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-customers">
+
+        <!-- List View -->
+        <div id="customers-list-view">
+          <div class="page-header">
+            <h2>👥 Customers <span id="cust-count">(0)</span></h2>
+            <button class="btn btn-primary" onclick="openCustomerModal()">➕ Add Customer</button>
+          </div>
+
+          <!-- Filters -->
+          <div class="filters-bar">
+            <div class="search-wrap">
+              <span class="si">🔍</span>
+              <input type="text" class="search-input-bar" id="custSearch" placeholder="Search by name, phone, aadhar...">
+            </div>
+            <select class="filter-select" id="filterYear">
+              <option value="">All Years</option>
+              <?php foreach($years as $y): ?>
+              <option value="<?= $y ?>"><?= $y ?></option>
+              <?php endforeach; ?>
+            </select>
+            <select class="filter-select" id="filterStatus">
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="loadCustomers()">🔄 Refresh</button>
+          </div>
+
+          <div class="card">
+            <div id="customers-table">
+              <div class="loading-overlay"><div class="spinner"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail View (hidden by default) -->
+        <div id="customers-detail-view" class="hidden">
+          <div class="page-header">
+            <h2>👤 Customer Detail</h2>
+            <button class="btn btn-secondary btn-sm" onclick="backToCustomers()">← Back to List</button>
+          </div>
+          <div id="customer-detail-content"></div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           PAGE: SESSIONS
+           ════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-sessions">
+        <div class="page-header">
+          <h2>⏱️ Sessions</h2>
+          <button class="btn btn-primary" onclick="openSessionModal()">➕ New Session</button>
+        </div>
+
+        <div class="filters-bar">
+          <div class="search-wrap">
+            <span class="si">🔍</span>
+            <input type="text" class="search-input-bar" id="sesSearch" placeholder="Search by customer name...">
+          </div>
+          <select class="filter-select" id="sesFilterYear">
+            <option value="">All Years</option>
+            <?php foreach($years as $y): ?>
+            <option value="<?= $y ?>"><?= $y ?></option>
+            <?php endforeach; ?>
+          </select>
+          <input type="date" class="filter-select" id="sesFilterDate" value="" style="cursor:pointer;">
+          <button class="btn btn-secondary btn-sm" onclick="loadSessions()">🔄 Refresh</button>
+        </div>
+
+        <div class="card">
+          <div id="sessions-table">
+            <div class="loading-overlay"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           PAGE: DOCUMENTS
+           ════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-documents">
+        <div class="page-header">
+          <h2>📁 Documents</h2>
+          <button class="btn btn-secondary btn-sm" onclick="loadDocuments()">🔄 Scan Folders</button>
+        </div>
+        <p class="text-muted text-sm mb-4">
+          Physical folders in: <code style="background:var(--bg-input);padding:2px 8px;border-radius:4px;">InternetCafeDiary/</code>
+        </p>
+        <div id="documents-grid">
+          <div class="loading-overlay"><div class="spinner"></div></div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           PAGE: REPORTS
+           ════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-reports">
+        <div class="page-header">
+          <h2>📈 Reports — <?= $currentYear ?></h2>
+          <button class="btn btn-secondary btn-sm" onclick="loadReports()">🔄 Refresh</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;">
+          <div class="card">
+            <div class="card-header"><h3>💰 Monthly Revenue (<?= $currentYear ?>)</h3></div>
+            <div class="card-body">
+              <div class="chart-container" id="monthly-chart-container">
+                <div class="loading-overlay"><div class="spinner"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h3>🛠️ Services Breakdown</h3></div>
+            <div class="card-body" id="service-breakdown">
+              <div class="spinner"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main><!-- /page-content -->
+  </div><!-- /main-content -->
+</div><!-- /app-shell -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     MODAL: ADD / EDIT CUSTOMER
+     ══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="customerModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="customerModalTitle">➕ Add New Customer</h3>
+      <button class="modal-close" onclick="closeModal('customerModal')" aria-label="Close">✕</button>
+    </div>
+    <form id="customerForm" novalidate>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="inp-name">Full Name <span>*</span></label>
+          <input id="inp-name" class="form-control" type="text" name="name" placeholder="e.g. RAM KUMAR" required autocomplete="off">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="inp-phone">Phone Number</label>
+            <input id="inp-phone" class="form-control" type="tel" name="phone" placeholder="10-digit number" maxlength="15">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="inp-aadhar">Aadhar Number</label>
+            <input id="inp-aadhar" class="form-control" type="text" name="aadhar" placeholder="XXXX-XXXX-XXXX" maxlength="20">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="inp-address">Address</label>
+          <input id="inp-address" class="form-control" type="text" name="address" placeholder="Village, Block, District...">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="inp-status">Status</label>
+            <select id="inp-status" class="form-control" name="status">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="inp-notes">Notes</label>
+          <textarea id="inp-notes" class="form-control" name="notes" rows="2" placeholder="Any additional notes..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('customerModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">💾 Save Customer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MODAL: ADD SESSION
+     ══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="sessionModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>➕ Add New Session</h3>
+      <button class="modal-close" onclick="closeModal('sessionModal')" aria-label="Close">✕</button>
+    </div>
+    <form id="sessionForm" novalidate>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="ses-customer">Customer <span>*</span></label>
+          <select id="ses-customer" class="form-control" name="customer_id" required>
+            <option value="">— Select Customer —</option>
+          </select>
+          <input type="hidden" name="customer_name" value="">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="ses-date">Date <span>*</span></label>
+            <input id="ses-date" class="form-control" type="date" name="date" required value="<?= $today ?>">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="ses-year">Year</label>
+            <select id="ses-year" class="form-control" name="year">
+              <?php foreach(array_reverse($years) as $y): ?>
+              <option value="<?= $y ?>" <?= $y==$currentYear?'selected':'' ?>><?= $y ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="ses-start">Start Time</label>
+            <input id="ses-start" class="form-control" type="time" name="start_time" value="<?= date('H:i') ?>">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="ses-end">End Time</label>
+            <input id="ses-end" class="form-control" type="time" name="end_time">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="ses-dur">Duration (minutes)</label>
+            <input id="ses-dur" class="form-control" type="number" name="duration_min" placeholder="30" min="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="ses-amount">Amount (₹) <span>*</span></label>
+            <input id="ses-amount" class="form-control" type="number" name="amount" placeholder="0" min="0" step="0.50" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="ses-service">Service Type</label>
+            <select id="ses-service" class="form-control" name="service">
+              <option value="">— Select Service —</option>
+              <?php
+              $services = ['Document Print','Form Fill','Browsing','Photo Print','Scanning','PDF Convert','Online Work','Government Form','Scholarship','Job Application','Aadhar Work','PAN Card','Other'];
+              foreach($services as $svc): ?>
+              <option value="<?= htmlspecialchars($svc) ?>"><?= htmlspecialchars($svc) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="ses-payment">Payment Mode</label>
+            <select id="ses-payment" class="form-control" name="payment_mode">
+              <option value="cash">💵 Cash</option>
+              <option value="upi">📱 UPI</option>
+              <option value="credit">💳 Credit</option>
+              <option value="free">🎁 Free</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="ses-notes">Notes</label>
+          <textarea id="ses-notes" class="form-control" name="notes" rows="2" placeholder="What work was done..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('sessionModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">💾 Save Session</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<!-- Main JS -->
+<script src="Assets/js/app.js"></script>
+
+<!-- Load customer badge count -->
+<script>
+  // Update sidebar badge after load
+  (async () => {
+    try {
+      const r = await fetch('php_files/api.php?resource=customers');
+      const d = await r.json();
+      const badge = document.getElementById('badge-customers');
+      if (badge) badge.textContent = d.total || 0;
+    } catch(e) {}
+  })();
+</script>
+
+</body>
+</html>
