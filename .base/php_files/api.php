@@ -60,6 +60,47 @@ function sanitizeFolderName($name) {
     return $name;
 }
 
+function getMimeType($filename) {
+    $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+    $mimes = [
+        'pdf'  => 'application/pdf',
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png'  => 'image/png',
+        'gif'  => 'image/gif',
+        'webp' => 'image/webp',
+        'txt'  => 'text/plain',
+        'doc'  => 'application/msword',
+        'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls'  => 'application/vnd.ms-excel',
+        'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'psd'  => 'image/vnd.adobe.photoshop'
+    ];
+    return $mimes[$ext] ?? 'application/octet-stream';
+}
+
+function isPathWithinStorage($path) {
+    $real = realpath($path);
+    if (!$real) return false;
+    $dirs = getStorageDirectories();
+    foreach ($dirs as $d) {
+        $realStorage = realpath($d['path']);
+        if ($realStorage && str_starts_with($real, $realStorage)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function formatBytes($bytes, $precision = 1) {
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $bytes = max($bytes, 0);
+    $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+    $pow = min($pow, count($units) - 1);
+    $bytes /= pow(1024, $pow);
+    return round($bytes, $precision) . ' ' . $units[$pow];
+}
+
 // ── SETTINGS HELPERS ──────────────────────────
 function getSettings() {
     $settings = readJson(SETTINGS_FILE);
@@ -586,6 +627,227 @@ if ($resource === 'sessions') {
 // ── FOLDERS (Multi-Directory Physical Scan) ───
 if ($resource === 'folders') {
     respond(['success' => true, 'data' => scanAllDirectories()]);
+}
+
+// ── DOCUMENTS (CRUD, VIEW, STREAM, DOWNLOAD) ───
+if ($resource === 'documents') {
+    // 1. INLINE PREVIEW / STREAM
+    if ($action === 'view') {
+        $path = $_GET['path'] ?? '';
+        if (!$path || !file_exists($path) || !isPathWithinStorage($path)) {
+            http_response_code(404);
+            echo "Document not found or access denied";
+            exit();
+        }
+        $mime = getMimeType($path);
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: inline; filename="' . basename($path) . '"');
+        header('Content-Length: ' . filesize($path));
+        readfile($path);
+        exit();
+    }
+
+    // 2. ATTACHMENT DOWNLOAD
+    if ($action === 'download') {
+        $path = $_GET['path'] ?? '';
+        if (!$path || !file_exists($path) || !isPathWithinStorage($path)) {
+            http_response_code(404);
+            echo "Document not found or access denied";
+            exit();
+        }
+        $mime = getMimeType($path);
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: attachment; filename="' . basename($path) . '"');
+        header('Content-Length: ' . filesize($path));
+        readfile($path);
+        exit();
+    }
+
+    // 3. LIST ALL DOCUMENTS (DATATABLE FEED)
+    if ($method === 'GET') {
+        $custDb = readJson(CUSTOMERS_FILE);
+        $customers = $custDb['customers'] ?? [];
+        $folders = scanAllDirectories();
+        $docsList = [];
+
+        foreach ($folders as $f) {
+            $folderName  = $f['folder'];
+            $storageId   = $f['storage_id'];
+            $storageName = $f['storage_name'];
+            $folderPath  = $f['full_path'];
+
+            $matchedCust = null;
+            foreach ($customers as $c) {
+                if (($c['folder_name'] ?? '') === $folderName) {
+                    $matchedCust = $c;
+                    break;
+                }
+            }
+
+            foreach ($f['files'] as $fileName) {
+                $filePath = $folderPath . DIRECTORY_SEPARATOR . $fileName;
+                $sizeBytes = @filesize($filePath) ?: 0;
+                $mtime = @filemtime($filePath) ?: time();
+                $ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+
+                $docsList[] = [
+                    'name'          => $fileName,
+                    'folder'        => $folderName,
+                    'customer_id'   => $matchedCust['id'] ?? null,
+                    'customer_name' => $matchedCust['name'] ?? $folderName,
+                    'storage_id'    => $storageId,
+                    'storage_name'  => $storageName,
+                    'full_path'     => $filePath,
+                    'size_bytes'    => $sizeBytes,
+                    'size_formatted'=> formatBytes($sizeBytes),
+                    'modified_date' => date('Y-m-d H:i', $mtime),
+                    'ext'           => $ext
+                ];
+            }
+        }
+
+        respond(['success' => true, 'data' => $docsList, 'total' => count($docsList)]);
+    }
+
+    // 4. UPLOAD DOCUMENT (CREATE)
+    if ($method === 'POST' && $action === 'upload') {
+        if (empty($_FILES['document'])) {
+            respond(['success' => false, 'message' => 'No file uploaded'], 400);
+        }
+
+        $file = $_FILES['document'];
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            respond(['success' => false, 'message' => 'File upload error code: ' . $file['error']], 400);
+        }
+
+        $targetFolder = trim($_POST['folder_name'] ?? '');
+        $customerId   = trim($_POST['customer_id'] ?? '');
+        $targetDirId  = trim($_POST['storage_dir_id'] ?? '');
+        $customName   = trim($_POST['custom_name'] ?? '');
+
+        $custDb = readJson(CUSTOMERS_FILE);
+        $matchedCustIndex = -1;
+        if ($customerId) {
+            foreach ($custDb['customers'] as $idx => $c) {
+                if ($c['id'] === $customerId) {
+                    $matchedCustIndex = $idx;
+                    $targetFolder = $c['folder_name'];
+                    $targetDirId  = $c['storage_dir_id'] ?? $targetDirId;
+                    break;
+                }
+            }
+        }
+
+        if (!$targetFolder) {
+            respond(['success' => false, 'message' => 'Customer or folder name is required'], 400);
+        }
+
+        $dirs = getStorageDirectories();
+        $targetDir = null;
+        if ($targetDirId) {
+            foreach ($dirs as $d) {
+                if ($d['id'] === $targetDirId) { $targetDir = $d; break; }
+            }
+        }
+        if (!$targetDir) $targetDir = getDefaultStorageDirectory();
+
+        $destDir = rtrim($targetDir['path'], '\\/') . DIRECTORY_SEPARATOR . $targetFolder;
+        if (!is_dir($destDir)) {
+            @mkdir($destDir, 0755, true);
+        }
+
+        $originalExt = pathinfo($file['name'], PATHINFO_EXTENSION);
+        if ($customName) {
+            $destFileName = sanitizeFolderName(pathinfo($customName, PATHINFO_FILENAME)) . '.' . ($originalExt ?: 'pdf');
+        } else {
+            $destFileName = $file['name'];
+        }
+
+        $destFilePath = $destDir . DIRECTORY_SEPARATOR . $destFileName;
+        if (!move_uploaded_file($file['tmp_name'], $destFilePath)) {
+            respond(['success' => false, 'message' => 'Failed to save uploaded file to destination folder'], 500);
+        }
+
+        // Update customer JSON documents list if matched
+        if ($matchedCustIndex >= 0) {
+            if (!in_array($destFileName, $custDb['customers'][$matchedCustIndex]['documents'] ?? [])) {
+                $custDb['customers'][$matchedCustIndex]['documents'][] = $destFileName;
+                writeJson(CUSTOMERS_FILE, $custDb);
+            }
+        }
+
+        respond([
+            'success'   => true,
+            'message'   => "Document '$destFileName' uploaded successfully!",
+            'file_name' => $destFileName,
+            'path'      => $destFilePath
+        ]);
+    }
+
+    // 5. RENAME DOCUMENT (UPDATE)
+    if ($method === 'POST' && $action === 'rename') {
+        $oldPath = trim($body['path'] ?? '');
+        $newName = trim($body['new_name'] ?? '');
+
+        if (!$oldPath || !$newName) respond(['success' => false, 'message' => 'Old path and new name required'], 400);
+        if (!file_exists($oldPath) || !isPathWithinStorage($oldPath)) {
+            respond(['success' => false, 'message' => 'Document not found or access denied'], 404);
+        }
+
+        $oldExt = pathinfo($oldPath, PATHINFO_EXTENSION);
+        if (!pathinfo($newName, PATHINFO_EXTENSION) && $oldExt) {
+            $newName .= '.' . $oldExt;
+        }
+
+        $dir = dirname($oldPath);
+        $newPath = $dir . DIRECTORY_SEPARATOR . $newName;
+
+        if (file_exists($newPath) && strtolower($newPath) !== strtolower($oldPath)) {
+            respond(['success' => false, 'message' => 'A file with this name already exists in this folder'], 400);
+        }
+
+        if (!@rename($oldPath, $newPath)) {
+            respond(['success' => false, 'message' => 'Failed to rename file on disk'], 500);
+        }
+
+        $oldBaseName = basename($oldPath);
+        $custDb = readJson(CUSTOMERS_FILE);
+        $custUpdated = false;
+        foreach ($custDb['customers'] as &$c) {
+            if (!empty($c['documents']) && in_array($oldBaseName, $c['documents'])) {
+                $c['documents'] = array_map(fn($d) => $d === $oldBaseName ? $newName : $d, $c['documents']);
+                $custUpdated = true;
+            }
+        }
+        if ($custUpdated) writeJson(CUSTOMERS_FILE, $custDb);
+
+        respond(['success' => true, 'message' => "Document renamed to '$newName'", 'new_name' => $newName, 'new_path' => $newPath]);
+    }
+
+    // 6. DELETE DOCUMENT
+    if ($method === 'POST' && $action === 'delete') {
+        $filePath = trim($body['path'] ?? '');
+        if (!$filePath || !file_exists($filePath) || !isPathWithinStorage($filePath)) {
+            respond(['success' => false, 'message' => 'Document not found or access denied'], 404);
+        }
+
+        $baseName = basename($filePath);
+        if (!@unlink($filePath)) {
+            respond(['success' => false, 'message' => 'Failed to delete file from disk'], 500);
+        }
+
+        $custDb = readJson(CUSTOMERS_FILE);
+        $custUpdated = false;
+        foreach ($custDb['customers'] as &$c) {
+            if (!empty($c['documents']) && in_array($baseName, $c['documents'])) {
+                $c['documents'] = array_values(array_filter($c['documents'], fn($d) => $d !== $baseName));
+                $custUpdated = true;
+            }
+        }
+        if ($custUpdated) writeJson(CUSTOMERS_FILE, $custDb);
+
+        respond(['success' => true, 'message' => "Document '$baseName' deleted successfully!"]);
+    }
 }
 
 // ── STATS ─────────────────────────────────────
