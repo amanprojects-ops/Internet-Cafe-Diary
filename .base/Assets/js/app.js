@@ -1,6 +1,6 @@
 /**
  * Internet Cafe Diary — Frontend Application JS
- * Handles: Navigation, CRUD Calls, System Manager, Dynamic Directories, SMTP, Charts, Toasts
+ * Uses Font Awesome Vector Icons (No Emojis)
  */
 
 // ══════════════════════════════════════════════════════════════
@@ -98,8 +98,11 @@ function applySettings(settings) {
   const g = settings.general;
 
   // Header and Sidebar Title
+  const iconClass = (g.logo_icon && g.logo_icon.startsWith('fa-')) ? g.logo_icon : 'fa-solid fa-desktop';
   const topTitle = document.getElementById('topHeaderTitle');
-  if (topTitle) topTitle.textContent = `${g.logo_icon || '🖥️'} ${g.site_title || 'Internet Cafe Diary'}`;
+  if (topTitle) {
+    topTitle.innerHTML = `<i class="${iconClass}"></i> ${escapeHtml(g.site_title || 'Internet Cafe Diary')}`;
+  }
 
   const sidebarTitle = document.getElementById('sidebarShopTitle');
   if (sidebarTitle) sidebarTitle.textContent = g.site_title || 'Internet Cafe';
@@ -112,7 +115,7 @@ function applySettings(settings) {
     if (g.logo_type === 'image' && g.logo_url) {
       sidebarIcon.innerHTML = `<img src="${g.logo_url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" alt="Logo">`;
     } else {
-      sidebarIcon.textContent = g.logo_icon || '🖥️';
+      sidebarIcon.innerHTML = `<i class="${iconClass}"></i>`;
     }
   }
 
@@ -140,7 +143,7 @@ function populateStorageDirectoryDropdowns() {
   const custDirSelect = document.getElementById('inp-storage-dir');
   if (custDirSelect) {
     custDirSelect.innerHTML = activeDirs.map(d =>
-      `<option value="${d.id}" ${d.is_default ? 'selected' : ''}>${d.name} (${d.path}) ${d.is_default ? '★ Default' : ''}</option>`
+      `<option value="${d.id}" ${d.is_default ? 'selected' : ''}>${escapeHtml(d.name)} (${escapeHtml(d.path)}) ${d.is_default ? '★ Default' : ''}</option>`
     ).join('');
   }
 
@@ -148,14 +151,14 @@ function populateStorageDirectoryDropdowns() {
   const custFilterSelect = document.getElementById('filterCustomerDir');
   if (custFilterSelect) {
     custFilterSelect.innerHTML = '<option value="">All Locations</option>' +
-      dirs.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      dirs.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
   }
 
   // Documents Location Select
   const docLocSelect = document.getElementById('filterDocLocation');
   if (docLocSelect) {
     docLocSelect.innerHTML = '<option value="">All Storage Locations</option>' +
-      dirs.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      dirs.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('');
   }
 }
 
@@ -172,16 +175,18 @@ function navigateTo(page) {
   document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
 
   const shopTitle = state.settings?.general?.site_title || 'Internet Cafe Diary';
+  const iconClass = (state.settings?.general?.logo_icon && state.settings.general.logo_icon.startsWith('fa-')) ? state.settings.general.logo_icon : 'fa-solid fa-desktop';
+
   const titles = {
-    dashboard: `🖥️ ${shopTitle}`,
-    customers: '👥 Customers',
-    sessions:  '⏱️ Sessions',
-    documents: '📁 Documents Multi-Directory',
-    reports:   '📊 Reports',
-    settings:  '⚙️ System Manager'
+    dashboard: `<i class="${iconClass}"></i> ${escapeHtml(shopTitle)}`,
+    customers: '<i class="fa-solid fa-users"></i> Customers',
+    sessions:  '<i class="fa-solid fa-clock"></i> Sessions',
+    documents: '<i class="fa-solid fa-folder-open"></i> Documents Multi-Directory',
+    reports:   '<i class="fa-solid fa-chart-line"></i> Reports',
+    settings:  '<i class="fa-solid fa-gear"></i> System Manager'
   };
   const topHeaderTitle = document.getElementById('topHeaderTitle');
-  if (topHeaderTitle) topHeaderTitle.textContent = titles[page] || shopTitle;
+  if (topHeaderTitle) topHeaderTitle.innerHTML = titles[page] || escapeHtml(shopTitle);
 
   if (page === 'dashboard') loadDashboard();
   if (page === 'customers') loadCustomers();
@@ -273,25 +278,25 @@ function renderDashStats(s) {
   const sym = state.settings?.general?.currency_symbol || '₹';
   el.innerHTML = `
     <div class="stat-card cyan">
-      <div class="stat-icon">👥</div>
+      <div class="stat-icon"><i class="fa-solid fa-users"></i></div>
       <div class="stat-label">Total Customers</div>
       <div class="stat-value">${s.total_customers ?? 0}</div>
       <div class="stat-sub">${s.active_customers ?? 0} active</div>
     </div>
     <div class="stat-card purple">
-      <div class="stat-icon">⏱️</div>
+      <div class="stat-icon"><i class="fa-solid fa-clock"></i></div>
       <div class="stat-label">Total Sessions</div>
       <div class="stat-value">${s.total_sessions ?? 0}</div>
       <div class="stat-sub">${s.today_sessions ?? 0} today</div>
     </div>
     <div class="stat-card green">
-      <div class="stat-icon">💰</div>
+      <div class="stat-icon"><i class="fa-solid fa-wallet"></i></div>
       <div class="stat-label">Today's Revenue</div>
       <div class="stat-value">${sym}${(s.today_revenue ?? 0).toFixed(0)}</div>
       <div class="stat-sub">Year: ${sym}${(s.year_revenue ?? 0).toFixed(0)}</div>
     </div>
     <div class="stat-card orange">
-      <div class="stat-icon">📈</div>
+      <div class="stat-icon"><i class="fa-solid fa-chart-pie"></i></div>
       <div class="stat-label">Total Revenue</div>
       <div class="stat-value">${sym}${(s.total_revenue ?? 0).toFixed(0)}</div>
       <div class="stat-sub">All time earnings</div>
@@ -307,11 +312,11 @@ function renderRecentCustomers() {
     <thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Date</th><th>Status</th><th></th></tr></thead>
     <tbody>${recent.map((c,i) => `<tr>
       <td class="text-muted">${i+1}</td>
-      <td class="td-name">${initials(c.name)} ${c.name}</td>
-      <td class="td-mono">${c.phone||'—'}</td>
+      <td class="td-name">${initials(c.name)} ${escapeHtml(c.name)}</td>
+      <td class="td-mono">${escapeHtml(c.phone)||'—'}</td>
       <td class="td-mono">${fmtDate(c.created_date)}</td>
       <td><span class="badge badge-${c.status==='active'?'active':'inactive'}">${c.status}</span></td>
-      <td><button class="btn btn-sm btn-secondary" onclick="viewCustomer('${c.id}')">View</button></td>
+      <td><button class="btn btn-sm btn-secondary" onclick="viewCustomer('${c.id}')"><i class="fa-solid fa-eye"></i> View</button></td>
     </tr>`).join('')}</tbody>
   </table></div>`;
 }
@@ -325,9 +330,9 @@ function renderRecentSessions() {
   el.innerHTML = `<div class="table-wrap"><table>
     <thead><tr><th>Customer</th><th>Date</th><th>Service</th><th>Time</th><th>Amount</th></tr></thead>
     <tbody>${recent.map(s => `<tr>
-      <td class="td-name">${s.customer_name}</td>
+      <td class="td-name">${escapeHtml(s.customer_name)}</td>
       <td class="td-mono">${fmtDate(s.date)}</td>
-      <td><span class="badge badge-cyan">${s.service||'—'}</span></td>
+      <td><span class="badge badge-cyan">${escapeHtml(s.service)||'—'}</span></td>
       <td class="td-mono">${s.start_time||''}${s.end_time?' → '+s.end_time:''}</td>
       <td class="td-mono text-right">${sym}${s.amount||0}</td>
     </tr>`).join('')}</tbody>
@@ -420,22 +425,22 @@ function renderCustomers() {
             ${c.name.charAt(0)}
           </div>
           <div>
-            <div class="td-name" style="font-size:13px;">${c.name}</div>
-            <div class="text-muted text-sm">${c.folder_name}</div>
+            <div class="td-name" style="font-size:13px;">${escapeHtml(c.name)}</div>
+            <div class="text-muted text-sm font-mono">${escapeHtml(c.folder_name)}</div>
           </div>
         </div>
       </td>
-      <td class="td-mono">${c.phone||'—'}</td>
-      <td class="td-mono">${c.aadhar||'—'}</td>
-      <td><span class="badge badge-cyan" title="${c.storage_path||''}">${c.storage_dir_name || 'Default'}</span></td>
+      <td class="td-mono">${escapeHtml(c.phone)||'—'}</td>
+      <td class="td-mono">${escapeHtml(c.aadhar)||'—'}</td>
+      <td><span class="badge badge-cyan" title="${escapeHtml(c.storage_path||'')}"><i class="fa-solid fa-hard-drive"></i> ${escapeHtml(c.storage_dir_name || 'Default')}</span></td>
       <td><span class="badge badge-purple">${c.created_year||'—'}</span></td>
-      <td><span class="badge badge-orange">${(c.documents||[]).length} files</span></td>
+      <td><span class="badge badge-orange"><i class="fa-solid fa-file"></i> ${(c.documents||[]).length} files</span></td>
       <td><span class="badge badge-${c.status==='active'?'active':'inactive'}">${c.status}</span></td>
       <td>
         <div class="action-btns">
-          <button class="btn btn-xs btn-secondary" onclick="viewCustomer('${c.id}')" title="View">👁</button>
-          <button class="btn btn-xs btn-secondary" onclick="editCustomer('${c.id}')" title="Edit">✏️</button>
-          <button class="btn btn-xs btn-danger"    onclick="deleteCustomer('${c.id}','${c.name}')" title="Delete">🗑</button>
+          <button class="btn btn-xs btn-secondary" onclick="viewCustomer('${c.id}')" title="View"><i class="fa-solid fa-eye"></i></button>
+          <button class="btn btn-xs btn-secondary" onclick="editCustomer('${c.id}')" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button class="btn btn-xs btn-danger"    onclick="deleteCustomer('${c.id}','${escapeHtml(c.name)}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
         </div>
       </td>
     </tr>`).join('')}</tbody>
@@ -484,55 +489,55 @@ async function viewCustomer(id) {
 
   const docs = (c.documents||[]).map(d => {
     const ext  = d.split('.').pop().toLowerCase();
-    const icon = { pdf:'📄', jpg:'🖼️', jpeg:'🖼️', png:'🖼️', doc:'📝', docx:'📝', xlsx:'📊', xls:'📊' }[ext] || '📎';
-    return `<div class="doc-item" title="${d}">
+    const icon = getFileIconHtml(ext);
+    return `<div class="doc-item" title="${escapeHtml(d)}">
       <div class="doc-icon">${icon}</div>
-      <div class="doc-name">${d}</div>
+      <div class="doc-name">${escapeHtml(d)}</div>
     </div>`;
   }).join('');
 
   const sym = state.settings?.general?.currency_symbol || '₹';
   const visits = (c.visits||[]).map(v => `<tr>
     <td class="td-mono">${fmtDate(v.date)}</td>
-    <td><span class="badge badge-cyan">${v.service||'—'}</span></td>
+    <td><span class="badge badge-cyan">${escapeHtml(v.service)||'—'}</span></td>
     <td class="td-mono">${sym}${v.amount||0}</td>
-    <td class="text-muted">${v.duration||'—'}</td>
+    <td class="text-muted">${escapeHtml(v.duration)||'—'}</td>
   </tr>`).join('');
 
   document.getElementById('customer-detail-content').innerHTML = `
     <div class="detail-header">
       <div class="detail-avatar">${c.name.charAt(0)}</div>
       <div class="detail-info">
-        <h2>${c.name}</h2>
-        <p>ID: ${c.id} &nbsp;|&nbsp; Folder: <code>${c.folder_name}</code></p>
-        <p class="text-muted text-sm mt-4">Storage: <span class="badge badge-cyan">${c.storage_dir_name || 'Default'}</span> <code class="text-muted">${c.storage_path || ''}</code></p>
+        <h2>${escapeHtml(c.name)}</h2>
+        <p>ID: ${c.id} &nbsp;|&nbsp; Folder: <code>${escapeHtml(c.folder_name)}</code></p>
+        <p class="text-muted text-sm mt-4">Storage: <span class="badge badge-cyan"><i class="fa-solid fa-hard-drive"></i> ${escapeHtml(c.storage_dir_name || 'Default')}</span> <code class="text-muted">${escapeHtml(c.storage_path || '')}</code></p>
         <div class="flex gap-2 mt-4">
           <span class="badge badge-${c.status==='active'?'active':'inactive'}">${c.status}</span>
           <span class="badge badge-purple">${c.created_year||'—'}</span>
         </div>
       </div>
       <div style="margin-left:auto;">
-        <button class="btn btn-primary btn-sm" onclick="openSessionModal('${c.id}','${c.name}')">➕ Add Session</button>
-        <button class="btn btn-secondary btn-sm mt-4" onclick="editCustomer('${c.id}')">✏️ Edit</button>
+        <button class="btn btn-primary btn-sm" onclick="openSessionModal('${c.id}','${escapeHtml(c.name)}')"><i class="fa-solid fa-plus"></i> Add Session</button>
+        <button class="btn btn-secondary btn-sm mt-4" onclick="editCustomer('${c.id}')"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
       </div>
     </div>
     <div class="detail-grid mb-4">
-      <div class="detail-field"><label>Phone</label><p>${c.phone||'—'}</p></div>
-      <div class="detail-field"><label>Aadhar</label><p class="font-mono">${c.aadhar||'—'}</p></div>
-      <div class="detail-field"><label>Address</label><p>${c.address||'—'}</p></div>
+      <div class="detail-field"><label>Phone</label><p>${escapeHtml(c.phone)||'—'}</p></div>
+      <div class="detail-field"><label>Aadhar</label><p class="font-mono">${escapeHtml(c.aadhar)||'—'}</p></div>
+      <div class="detail-field"><label>Address</label><p>${escapeHtml(c.address)||'—'}</p></div>
       <div class="detail-field"><label>Registered Date</label><p class="font-mono">${fmtDate(c.created_date)}</p></div>
-      ${c.notes ? `<div class="detail-field" style="grid-column:1/-1"><label>Notes</label><p>${c.notes}</p></div>` : ''}
+      ${c.notes ? `<div class="detail-field" style="grid-column:1/-1"><label>Notes</label><p>${escapeHtml(c.notes)}</p></div>` : ''}
     </div>
     <div class="card mb-4">
-      <div class="card-header"><h3>📁 Documents (${(c.documents||[]).length})</h3>
-        <small class="text-muted">Folder: <code>${c.folder_name}</code></small>
+      <div class="card-header"><h3><i class="fa-solid fa-folder-open"></i> Documents (${(c.documents||[]).length})</h3>
+        <small class="text-muted">Folder: <code>${escapeHtml(c.folder_name)}</code></small>
       </div>
       <div class="card-body">
         ${docs ? `<div class="docs-grid">${docs}</div>` : '<p class="text-muted text-sm">No documents stored</p>'}
       </div>
     </div>
     <div class="card">
-      <div class="card-header"><h3>⏱️ Visit History (${(c.visits||[]).length})</h3></div>
+      <div class="card-header"><h3><i class="fa-solid fa-clock-rotate-left"></i> Visit History (${(c.visits||[]).length})</h3></div>
       <div class="card-body" style="padding:0;">
         ${visits ? `<div class="table-wrap"><table>
           <thead><tr><th>Date</th><th>Service</th><th>Amount</th><th>Duration</th></tr></thead>
@@ -582,7 +587,7 @@ function openCustomerModal(editId = null) {
     const c = state.customers.find(x => x.id === editId);
     if (!c) return;
     form.dataset.editId = editId;
-    title.textContent   = '✏️ Edit Customer';
+    title.innerHTML     = '<i class="fa-solid fa-pen-to-square"></i> Edit Customer';
     form.name.value     = c.name;
     form.phone.value    = c.phone   || '';
     form.address.value  = c.address || '';
@@ -593,7 +598,7 @@ function openCustomerModal(editId = null) {
       form.storage_dir_id.value = c.storage_dir_id;
     }
   } else {
-    title.textContent = '➕ Add New Customer';
+    title.innerHTML = '<i class="fa-solid fa-user-plus"></i> Add New Customer';
   }
   openModal('customerModal');
 }
@@ -647,15 +652,15 @@ function renderSessions() {
     </tr></thead>
     <tbody>${list.map(s => `<tr>
       <td class="td-mono text-muted" style="font-size:11px;">${s.id}</td>
-      <td class="td-name">${s.customer_name}</td>
+      <td class="td-name">${escapeHtml(s.customer_name)}</td>
       <td class="td-mono">${fmtDate(s.date)}</td>
-      <td><span class="badge badge-cyan">${s.service||'—'}</span></td>
+      <td><span class="badge badge-cyan">${escapeHtml(s.service)||'—'}</span></td>
       <td class="td-mono">${s.start_time||''}${s.end_time?' → '+s.end_time:''}</td>
       <td class="text-muted">${s.duration_min||0} min</td>
       <td class="td-mono"><strong>${sym}${s.amount||0}</strong></td>
-      <td><span class="badge badge-${s.payment_mode==='cash'?'active':'purple'}">${s.payment_mode||'cash'}</span></td>
+      <td><span class="badge badge-${s.payment_mode==='cash'?'active':'purple'}">${escapeHtml(s.payment_mode||'cash')}</span></td>
       <td>
-        <button class="btn btn-xs btn-danger" onclick="deleteSession('${s.id}')">🗑</button>
+        <button class="btn btn-xs btn-danger" onclick="deleteSession('${s.id}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
       </td>
     </tr>`).join('')}</tbody>
   </table></div>`;
@@ -687,7 +692,7 @@ function openSessionModal(custId = '', custName = '') {
 
   const sel = form.querySelector('[name="customer_id"]');
   sel.innerHTML = state.customers.map(c =>
-    `<option value="${c.id}" ${c.id===custId?'selected':''}>${c.name}</option>`
+    `<option value="${c.id}" ${c.id===custId?'selected':''}>${escapeHtml(c.name)}</option>`
   ).join('');
 
   const nameSel = form.querySelector('[name="customer_name"]');
@@ -751,25 +756,27 @@ function renderDocuments() {
     const docs    = f.files || [];
     const docHtml = docs.map(d => {
       const ext  = d.split('.').pop().toLowerCase();
-      const icon = { pdf:'📄', jpg:'🖼️', jpeg:'🖼️', png:'🖼️', doc:'📝', docx:'📝', xlsx:'📊' }[ext] || '📎';
-      return `<div class="doc-item" title="${d}">
+      const icon = getFileIconHtml(ext);
+      return `<div class="doc-item" title="${escapeHtml(d)}">
         <div class="doc-icon">${icon}</div>
-        <div class="doc-name">${d}</div>
+        <div class="doc-name">${escapeHtml(d)}</div>
       </div>`;
     }).join('');
 
     return `<div class="card mb-4">
       <div class="card-header">
         <div class="flex items-center gap-3">
-          <div style="width:38px;height:38px;background:linear-gradient(135deg,#00d4ff,#a855f7);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;">📁</div>
+          <div style="width:38px;height:38px;background:linear-gradient(135deg,#00d4ff,#a855f7);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;">
+            <i class="fa-solid fa-folder"></i>
+          </div>
           <div>
-            <h3 style="font-size:14px;">${f.folder}</h3>
-            <p class="text-muted text-sm">${f.count} file${f.count!==1?'s':''} &bull; Location: <span class="badge badge-cyan">${f.storage_name || 'Storage'}</span></p>
+            <h3 style="font-size:14px;">${escapeHtml(f.folder)}</h3>
+            <p class="text-muted text-sm">${f.count} file${f.count!==1?'s':''} &bull; Location: <span class="badge badge-cyan"><i class="fa-solid fa-hard-drive"></i> ${escapeHtml(f.storage_name || 'Storage')}</span></p>
           </div>
         </div>
         <div class="flex items-center gap-2">
-          ${cust ? `<span class="badge badge-active">Registered</span>` : `<span class="badge badge-inactive">Not in DB</span>`}
-          <span class="text-muted text-sm font-mono" style="font-size:10px;" title="${f.full_path}">${f.full_path}</span>
+          ${cust ? `<span class="badge badge-active"><i class="fa-solid fa-check"></i> Registered</span>` : `<span class="badge badge-inactive">Unlinked</span>`}
+          <span class="text-muted text-sm font-mono" style="font-size:10px;" title="${escapeHtml(f.full_path)}">${escapeHtml(f.full_path)}</span>
         </div>
       </div>
       ${docs.length ? `<div class="card-body"><div class="docs-grid">${docHtml}</div></div>` : ''}
@@ -830,11 +837,11 @@ async function loadReports() {
     if (svcEl) {
       svcEl.innerHTML = Object.entries(svcCount).sort((a,b)=>b[1]-a[1]).map(([svc,cnt]) =>
         `<div class="flex items-center gap-2 mb-4" style="padding:8px 0;border-bottom:1px solid var(--border);">
-          <span class="badge badge-cyan">${svc}</span>
+          <span class="badge badge-cyan">${escapeHtml(svc)}</span>
           <div style="flex:1;background:rgba(0,212,255,0.1);height:6px;border-radius:3px;overflow:hidden;">
             <div style="width:${(cnt/sessions.length*100).toFixed(0)}%;height:100%;background:linear-gradient(90deg,#00d4ff,#a855f7);border-radius:3px;"></div>
           </div>
-          <span class="text-muted text-sm">${cnt}</span>
+          <span class="text-muted text-sm font-mono">${cnt}</span>
         </div>`
       ).join('') || '<p class="text-muted text-sm">No data</p>';
     }
@@ -879,7 +886,7 @@ function populateGeneralSettingsForm() {
   form.email.value            = g.email || '';
   form.address.value          = g.address || '';
   form.logo_type.value        = g.logo_type || 'icon';
-  form.logo_icon.value        = g.logo_icon || '🖥️';
+  form.logo_icon.value        = g.logo_icon || 'fa-solid fa-desktop';
   form.logo_url.value         = g.logo_url || '';
 
   const isImg = g.logo_type === 'image';
@@ -921,19 +928,19 @@ function renderStorageDirectories() {
       <div class="directory-card ${isDef ? 'is-default' : ''}">
         <div class="dir-info">
           <h4>
-            <span>${d.name}</span>
-            ${isDef ? '<span class="badge badge-cyan">★ Default Location</span>' : ''}
+            <span>${escapeHtml(d.name)}</span>
+            ${isDef ? '<span class="badge badge-cyan"><i class="fa-solid fa-star"></i> Default Location</span>' : ''}
             <span class="badge badge-${isActive ? 'active' : 'inactive'}">${isActive ? 'Active' : 'Inactive'}</span>
           </h4>
-          <p>${d.path}</p>
+          <p><i class="fa-solid fa-folder"></i> ${escapeHtml(d.path)}</p>
         </div>
         <div class="flex items-center gap-2">
           ${!isDef ? `
-            <button class="btn btn-xs btn-secondary" onclick="setDefaultDirectory('${d.id}')">Set Default</button>
-            <button class="btn btn-xs btn-secondary" onclick="toggleDirectoryStatus('${d.id}')">${isActive ? 'Deactivate' : 'Activate'}</button>
-            <button class="btn btn-xs btn-danger" onclick="removeDirectory('${d.id}')">🗑</button>
+            <button class="btn btn-xs btn-secondary" onclick="setDefaultDirectory('${d.id}')"><i class="fa-solid fa-star"></i> Set Default</button>
+            <button class="btn btn-xs btn-secondary" onclick="toggleDirectoryStatus('${d.id}')">${isActive ? '<i class="fa-solid fa-pause"></i> Deactivate' : '<i class="fa-solid fa-play"></i> Activate'}</button>
+            <button class="btn btn-xs btn-danger" onclick="removeDirectory('${d.id}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
           ` : `
-            <span class="text-muted text-sm font-mono">Primary Storage</span>
+            <span class="text-muted text-sm font-mono"><i class="fa-solid fa-shield"></i> Primary Storage</span>
           `}
         </div>
       </div>
@@ -942,7 +949,6 @@ function renderStorageDirectories() {
 }
 
 function initSettingsForms() {
-  // General Branding Form
   const genForm = document.getElementById('generalSettingsForm');
   genForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -957,7 +963,6 @@ function initSettingsForms() {
     }
   });
 
-  // SMTP Settings Form
   const smtpForm = document.getElementById('smtpSettingsForm');
   smtpForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1037,17 +1042,17 @@ async function testDirectoryPath() {
   const path = pathInp?.value.trim();
 
   if (!path) {
-    if (resultEl) resultEl.innerHTML = '<span style="color:var(--accent-red)">Enter a path</span>';
+    if (resultEl) resultEl.innerHTML = '<span style="color:var(--accent-red)"><i class="fa-solid fa-circle-xmark"></i> Enter a path</span>';
     return;
   }
 
-  if (resultEl) resultEl.innerHTML = '<span class="text-muted">Testing...</span>';
+  if (resultEl) resultEl.innerHTML = '<span class="text-muted"><i class="fa-solid fa-spinner fa-spin"></i> Testing...</span>';
   const res = await apiPost('settings', { path }, 'test_directory');
 
   if (res.success) {
-    if (resultEl) resultEl.innerHTML = `<span style="color:var(--accent-green)">✔ ${res.message}</span>`;
+    if (resultEl) resultEl.innerHTML = `<span style="color:var(--accent-green)"><i class="fa-solid fa-circle-check"></i> ${escapeHtml(res.message)}</span>`;
   } else {
-    if (resultEl) resultEl.innerHTML = `<span style="color:var(--accent-red)">✖ ${res.message}</span>`;
+    if (resultEl) resultEl.innerHTML = `<span style="color:var(--accent-red)"><i class="fa-solid fa-circle-xmark"></i> ${escapeHtml(res.message)}</span>`;
   }
 }
 
@@ -1094,22 +1099,22 @@ async function loadSystemInfo() {
       const diskHtml = (d.storage_disks || []).map(dk => `
         <div style="background:var(--bg-input);padding:12px;border-radius:8px;margin-bottom:8px;border:1px solid var(--border);">
           <div class="flex items-center justify-between">
-            <strong>${dk.name}</strong>
-            <span class="badge ${dk.exists ? 'badge-active' : 'badge-inactive'}">${dk.exists ? 'Online' : 'Not Found'}</span>
+            <strong><i class="fa-solid fa-hard-drive"></i> ${escapeHtml(dk.name)}</strong>
+            <span class="badge ${dk.exists ? 'badge-active' : 'badge-inactive'}">${dk.exists ? '<i class="fa-solid fa-check"></i> Online' : '<i class="fa-solid fa-xmark"></i> Not Found'}</span>
           </div>
-          <div class="font-mono text-sm text-muted mt-4">${dk.path}</div>
+          <div class="font-mono text-sm text-muted mt-4">${escapeHtml(dk.path)}</div>
           ${dk.exists ? `<div class="text-sm mt-4">Free: <strong>${dk.free_gb} GB</strong> / Total: ${dk.total_gb} GB</div>` : ''}
         </div>
       `).join('');
 
       container.innerHTML = `
         <div class="detail-grid mb-4">
-          <div class="detail-field"><label>PHP Version</label><p class="font-mono">${d.php_version}</p></div>
-          <div class="detail-field"><label>Operating System</label><p>${d.server_os}</p></div>
-          <div class="detail-field"><label>Server Software</label><p class="font-mono">${d.server_soft}</p></div>
-          <div class="detail-field"><label>Memory Limit</label><p class="font-mono">${d.memory_limit}</p></div>
+          <div class="detail-field"><label>PHP Version</label><p class="font-mono">${escapeHtml(d.php_version)}</p></div>
+          <div class="detail-field"><label>Operating System</label><p>${escapeHtml(d.server_os)}</p></div>
+          <div class="detail-field"><label>Server Software</label><p class="font-mono">${escapeHtml(d.server_soft)}</p></div>
+          <div class="detail-field"><label>Memory Limit</label><p class="font-mono">${escapeHtml(d.memory_limit)}</p></div>
         </div>
-        <h4 style="font-size:13px;font-weight:700;margin-bottom:10px;">💾 Storage Drive Health & Free Space</h4>
+        <h4 style="font-size:13px;font-weight:700;margin-bottom:10px;"><i class="fa-solid fa-database"></i> Storage Drive Health & Free Space</h4>
         ${diskHtml}
       `;
     }
@@ -1134,11 +1139,16 @@ document.addEventListener('click', (e) => {
 // TOAST
 // ══════════════════════════════════════════════════════════════
 function toast(msg, type = 'info') {
-  const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
+  const icons = {
+    success: '<i class="fa-solid fa-circle-check"></i>',
+    error:   '<i class="fa-solid fa-circle-xmark"></i>',
+    info:    '<i class="fa-solid fa-circle-info"></i>',
+    warning: '<i class="fa-solid fa-triangle-exclamation"></i>'
+  };
   const container = document.getElementById('toast-container');
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
+  el.innerHTML = `<span class="toast-icon">${icons[type]||icons.info}</span><span>${escapeHtml(msg)}</span>`;
   container.appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; el.style.transition = '0.3s'; setTimeout(() => el.remove(), 300); }, 3500);
 }
@@ -1152,7 +1162,7 @@ function showLoading(id) {
 }
 
 function emptyState(msg) {
-  return `<div class="empty-state"><div class="icon">📭</div><p>${msg}</p></div>`;
+  return `<div class="empty-state"><div class="icon"><i class="fa-solid fa-inbox"></i></div><p>${escapeHtml(msg)}</p></div>`;
 }
 
 function initials(name) {
@@ -1164,4 +1174,36 @@ function fmtDate(d) {
   try {
     return new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
   } catch { return d; }
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function getFileIconHtml(ext) {
+  switch (ext) {
+    case 'pdf':
+      return '<i class="fa-solid fa-file-pdf" style="color:#ef4444;font-size:24px;"></i>';
+    case 'jpg':
+    case 'jpeg':
+    case 'png':
+    case 'gif':
+    case 'webp':
+      return '<i class="fa-solid fa-file-image" style="color:#3b82f6;font-size:24px;"></i>';
+    case 'doc':
+    case 'docx':
+      return '<i class="fa-solid fa-file-word" style="color:#2563eb;font-size:24px;"></i>';
+    case 'xls':
+    case 'xlsx':
+    case 'csv':
+      return '<i class="fa-solid fa-file-excel" style="color:#10b981;font-size:24px;"></i>';
+    default:
+      return '<i class="fa-solid fa-file-lines" style="color:#a855f7;font-size:24px;"></i>';
+  }
 }
