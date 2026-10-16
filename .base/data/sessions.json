@@ -1,36 +1,7 @@
 {
-  "sessions": [
-    {
-      "id": "SES-2024-001",
-      "customer_id": "CUST-001",
-      "customer_name": "ABHIMANYU KUMAR",
-      "date": "2024-01-15",
-      "year": "2024",
-      "start_time": "10:30",
-      "end_time": "11:00",
-      "duration_min": 30,
-      "service": "Document Print",
-      "amount": 20,
-      "payment_mode": "cash",
-      "notes": "Printed Aadhar, Marksheet"
-    },
-    {
-      "id": "SES-2024-002",
-      "customer_id": "CUST-002",
-      "customer_name": "ANJALI KUMARI",
-      "date": "2024-02-20",
-      "year": "2024",
-      "start_time": "14:00",
-      "end_time": "14:45",
-      "duration_min": 45,
-      "service": "Form Fill",
-      "amount": 50,
-      "payment_mode": "cash",
-      "notes": "Scholarship form filled"
+    "sessions": [],
+    "meta": {
+        "last_updated": "2026-10-16T15:50:18+02:00",
+        "total_sessions": 0
     }
-  ],
-  "meta": {
-    "last_updated": "2026-10-16T18:10:00+05:30",
-    "total_sessions": 2
-  }
 }

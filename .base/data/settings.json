@@ -1,41 +1,49 @@
 {
-  "general": {
-    "site_title": "Internet Cafe Diary",
-    "tagline": "Customer & Cafe Management System",
-    "owner_name": "Admin",
-    "phone": "9876543210",
-    "email": "cafe@example.com",
-    "address": "Main Market Road",
-    "currency_symbol": "₹",
-    "logo_type": "icon",
-    "logo_icon": "🖥️",
-    "logo_url": ""
-  },
-  "storage": {
-    "default_directory_id": "dir_root",
-    "directories": [
-      {
-        "id": "dir_root",
-        "name": "Default Root Directory",
-        "path": "c:\\Users\\Technical Aman\\Desktop\\InternetCafeDiary",
-        "is_active": true,
-        "is_default": true,
-        "created_at": "2026-10-16"
-      }
-    ]
-  },
-  "smtp": {
-    "host": "smtp.gmail.com",
-    "port": 587,
-    "username": "",
-    "password": "",
-    "encryption": "tls",
-    "from_email": "",
-    "from_name": "Internet Cafe Diary",
-    "enabled": false
-  },
-  "meta": {
-    "version": "1.1",
-    "last_updated": "2026-10-16T18:56:00+05:30"
-  }
+    "general": {
+        "site_title": "Internet Cafe Diary",
+        "tagline": "Customer & Cafe Management System",
+        "owner_name": "Admin",
+        "phone": "9876543210",
+        "email": "cafe@example.com",
+        "address": "Main Market Road",
+        "currency_symbol": "₹",
+        "logo_type": "icon",
+        "logo_icon": "🖥️",
+        "logo_url": ""
+    },
+    "storage": {
+        "default_directory_id": "dir_d3bd83db",
+        "directories": [
+            {
+                "id": "dir_root",
+                "name": "Default Root Directory",
+                "path": "c:\\Users\\Technical Aman\\Desktop\\InternetCafeDiary",
+                "is_active": false,
+                "is_default": false,
+                "created_at": "2026-10-16"
+            },
+            {
+                "id": "dir_d3bd83db",
+                "name": "FORMS LOGS",
+                "path": "D:\\Any User",
+                "is_active": true,
+                "is_default": true,
+                "created_at": "2026-10-16"
+            }
+        ]
+    },
+    "smtp": {
+        "host": "smtp.gmail.com",
+        "port": 587,
+        "username": "",
+        "password": "",
+        "encryption": "tls",
+        "from_email": "",
+        "from_name": "Internet Cafe Diary",
+        "enabled": false
+    },
+    "meta": {
+        "version": "1.1",
+        "last_updated": "2026-10-16T15:48:19+02:00"
+    }
 }

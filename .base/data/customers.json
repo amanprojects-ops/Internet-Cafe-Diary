@@ -1,70 +1,8 @@
 {
-  "customers": [
-    {
-      "id": "CUST-001",
-      "name": "ABHIMANYU KUMAR",
-      "folder_name": "ABHIMANYU_KUMAR",
-      "phone": "9876543210",
-      "address": "Village - Pipra, Block - Chainpur",
-      "aadhar": "1234-5678-9012",
-      "created_date": "2024-01-15",
-      "created_year": "2024",
-      "status": "active",
-      "notes": "Regular customer",
-      "documents": ["12TH_MARKSHEET.pdf", "Application Form (3).pdf", "PaymentReceipt (2).pdf", "cast.jpg", "pho.jpg", "sin.jpg"],
-      "visits": [
-        {"date": "2024-01-15", "service": "Document Print", "amount": 20, "duration": "30min"},
-        {"date": "2024-03-10", "service": "Browsing", "amount": 30, "duration": "1hr"}
-      ]
-    },
-    {
-      "id": "CUST-002",
-      "name": "ANJALI KUMARI",
-      "folder_name": "ANJALI_KUMARI",
-      "phone": "9811223344",
-      "address": "Village - Baluaha, Block - Chainpur",
-      "aadhar": "9876-5432-1098",
-      "created_date": "2024-02-20",
-      "created_year": "2024",
-      "status": "active",
-      "notes": "",
-      "documents": [],
-      "visits": [
-        {"date": "2024-02-20", "service": "Form Fill", "amount": 50, "duration": "45min"}
-      ]
-    },
-    {
-      "id": "CUST-003",
-      "name": "AMIT KUMAR",
-      "folder_name": "Amit Kumar",
-      "phone": "9700112233",
-      "address": "Village - Kochila, Block - Chainpur",
-      "aadhar": "5678-9012-3456",
-      "created_date": "2024-03-05",
-      "created_year": "2024",
-      "status": "active",
-      "notes": "",
-      "documents": [],
-      "visits": []
-    },
-    {
-      "id": "CUST-004",
-      "name": "ANITA DEVI",
-      "folder_name": "Anita Devi",
-      "phone": "9600556677",
-      "address": "Village - Pipra, Block - Chainpur",
-      "aadhar": "3456-7890-1234",
-      "created_date": "2024-04-10",
-      "created_year": "2024",
-      "status": "inactive",
-      "notes": "Came for Aadhar correction",
-      "documents": [],
-      "visits": []
+    "customers": [],
+    "meta": {
+        "last_updated": "2026-10-16T15:49:57+02:00",
+        "total_customers": 0,
+        "version": "1.0"
     }
-  ],
-  "meta": {
-    "last_updated": "2026-10-16T18:10:00+05:30",
-    "total_customers": 4,
-    "version": "1.0"
-  }
 }
