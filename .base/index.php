@@ -268,6 +268,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
           <h2><i class="fa-solid fa-folder-open"></i> Documents Manager <span id="docs-total-count">(0)</span></h2>
           <div class="flex gap-2">
             <button class="btn btn-primary" onclick="openUploadDocModal()"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</button>
+            <button class="btn btn-secondary" onclick="openNewSubfolderModal()"><i class="fa-solid fa-folder-plus"></i> New Sub-Folder</button>
             <button class="btn btn-secondary btn-sm" onclick="loadDocuments()"><i class="fa-solid fa-arrows-rotate"></i> Rescan</button>
           </div>
         </div>
@@ -279,7 +280,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
               <i class="fa-solid fa-table-list"></i> Searchable DataTable
             </button>
             <button class="btn btn-sm btn-secondary" id="viewModeGridBtn" onclick="switchDocViewMode('grid')">
-              <i class="fa-solid fa-folder-tree"></i> Customer Folder View
+              <i class="fa-solid fa-folder-tree"></i> Customer & Sub-Folder Explorer
             </button>
           </div>
           <div class="flex gap-2">
@@ -289,7 +290,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
           </div>
         </div>
 
-        <!-- 1. DataTable View (Instant Search, Sort, Pagination) -->
+        <!-- 1. DataTable View (Instant Search, Sort, Pagination with Sub-Folders) -->
         <div id="documents-table-container" class="card">
           <div class="card-body">
             <div class="table-wrap">
@@ -299,6 +300,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
                     <th>Type</th>
                     <th>Document Name</th>
                     <th>Customer / Folder</th>
+                    <th>Sub-Folder</th>
                     <th>Storage Location</th>
                     <th>File Size</th>
                     <th>Modified Date</th>
@@ -311,8 +313,28 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
           </div>
         </div>
 
-        <!-- 2. Customer Folder Grid View -->
+        <!-- 2. Customer & Nested Sub-Folder Explorer View -->
         <div id="documents-grid-container" class="hidden">
+          <!-- Interactive Breadcrumb Navigation -->
+          <div class="card mb-4" style="padding:12px 18px;">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div id="folderBreadcrumbs" class="folder-breadcrumbs flex items-center gap-2 flex-wrap">
+                <!-- Breadcrumb items populated by app.js -->
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="btn btn-secondary btn-xs" id="folderUpBtn" onclick="folderNavigateUp()" style="display:none;">
+                  <i class="fa-solid fa-arrow-up"></i> Level Up
+                </button>
+                <button class="btn btn-secondary btn-xs" id="newFolderInViewBtn" onclick="openNewSubfolderModal()">
+                  <i class="fa-solid fa-folder-plus"></i> New Sub-Folder
+                </button>
+                <button class="btn btn-primary btn-xs" id="uploadInViewBtn" onclick="openUploadDocModal()">
+                  <i class="fa-solid fa-cloud-arrow-up"></i> Upload Here
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div id="documents-grid">
             <div class="loading-overlay"><div class="spinner"></div></div>
           </div>
@@ -600,18 +622,28 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
       <div class="modal-body">
         <div class="form-group">
           <label class="form-label">Assign To Customer / Folder <span>*</span></label>
-          <select class="form-control" name="customer_id" id="uploadDocCustomerSelect" required>
+          <select class="form-control" name="customer_id" id="uploadDocCustomerSelect" required onchange="onUploadCustomerChanged()">
             <option value="">— Select Customer —</option>
           </select>
         </div>
         <div class="form-group" id="uploadCustomFolderGroup" style="display:none;">
-          <label class="form-label">Custom Folder Name</label>
-          <input class="form-control font-mono" type="text" name="folder_name" placeholder="FOLDER_NAME">
+          <label class="form-label">Custom Customer Folder Name</label>
+          <input class="form-control font-mono" type="text" name="folder_name" id="uploadDocCustomFolderInput" placeholder="CUSTOMER_FOLDER">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Destination Sub-Folder</label>
+          <select class="form-control" id="uploadDocSubfolderSelect" onchange="onUploadSubfolderSelectChanged()">
+            <option value="">📁 Root (Main Customer Directory)</option>
+            <option value="__NEW__">+ Create / Enter New Sub-Folder...</option>
+          </select>
+          <input class="form-control font-mono mt-2" type="text" id="uploadDocCustomSubfolderInput" placeholder="e.g. 2024-2025, Aadhaar, Forms" style="display:none;margin-top:6px;">
+          <input type="hidden" name="subfolder" id="uploadDocFinalSubfolder" value="">
+          <small class="text-muted" style="display:block;margin-top:4px;">Upload directly into customer's sub-folder or create a new subfolder.</small>
         </div>
         <div class="form-group">
           <label class="form-label">Select File to Upload <span>*</span></label>
           <input class="form-control" type="file" name="document" required style="padding:8px;">
-          <small class="text-muted" style="display:block;margin-top:4px;">Supported: PDF, JPG, PNG, DOCX, XLSX, PSD, etc.</small>
+          <small class="text-muted" style="display:block;margin-top:4px;">Supported: PDF, JPG, PNG, DOCX, XLSX, PSD, ZIP, etc.</small>
         </div>
         <div class="form-group">
           <label class="form-label">Custom File Name (Optional)</label>
@@ -620,7 +652,76 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeModal('uploadDocModal')">Cancel</button>
-        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Upload File</button>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-cloud-arrow-up"></i> Upload File</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MODAL: CREATE NEW SUB-FOLDER
+     ══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="newSubfolderModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fa-solid fa-folder-plus"></i> Create New Sub-Folder</h3>
+      <button class="modal-close" onclick="closeModal('newSubfolderModal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="newSubfolderForm">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Customer / Base Folder <span>*</span></label>
+          <select class="form-control" id="newSubfolderCustomerSelect" required onchange="onNewSubfolderCustomerChanged()">
+            <option value="">— Select Customer / Folder —</option>
+          </select>
+          <input type="hidden" name="customer_folder" id="newSubfolderCustomerFolder">
+          <input type="hidden" name="storage_id" id="newSubfolderStorageId">
+          <input type="hidden" name="customer_id" id="newSubfolderCustomerId">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Parent Directory (For Nested Sub-Folders)</label>
+          <select class="form-control" name="parent_subfolder" id="newSubfolderParentSelect">
+            <option value="">📁 Root Customer Folder</option>
+          </select>
+          <small class="text-muted" style="display:block;margin-top:4px;">Choose an existing sub-folder to nest inside it, or keep Root.</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">New Sub-Folder Name <span>*</span></label>
+          <input class="form-control font-mono" type="text" name="subfolder_name" id="newSubfolderNameInput" required placeholder="e.g. 2024-2025, Aadhaar_Cards, Certificates, Forms">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('newSubfolderModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-folder-plus"></i> Create Sub-Folder</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MODAL: RENAME SUB-FOLDER
+     ══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="renameSubfolderModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fa-solid fa-pen-to-square"></i> Rename Sub-Folder</h3>
+      <button class="modal-close" onclick="closeModal('renameSubfolderModal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="renameSubfolderForm">
+      <div class="modal-body">
+        <input type="hidden" name="path" id="renameSubfolderPath">
+        <div class="form-group">
+          <label class="form-label">Current Folder Name</label>
+          <input class="form-control font-mono" type="text" id="renameSubfolderOldName" readonly style="opacity:0.7;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">New Folder Name <span>*</span></label>
+          <input class="form-control font-mono" type="text" name="new_name" id="renameSubfolderNewName" required placeholder="e.g. 2024-2025">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('renameSubfolderModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Save Rename</button>
       </div>
     </form>
   </div>
