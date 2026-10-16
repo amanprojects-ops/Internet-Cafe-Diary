@@ -861,8 +861,88 @@ input:checked + .toggle-slider {
   background-color: rgba(0,212,255,0.3);
   border-color: var(--accent-cyan);
 }
-input:checked + .toggle-slider:before {
-  transform: translateX(20px);
-  background-color: var(--accent-cyan);
+/* ══════════════════════════════════════════════════════════════
+   DATATABLES DARK THEME & PREVIEW MODAL
+   ══════════════════════════════════════════════════════════════ */
+.dataTables_wrapper {
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 16px 0;
 }
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+  color: var(--text-secondary) !important;
+  margin-bottom: 12px;
+}
+.dataTables_wrapper .dataTables_length select,
+.dataTables_wrapper .dataTables_filter input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+}
+.dataTables_wrapper .dataTables_length select:focus,
+.dataTables_wrapper .dataTables_filter input:focus {
+  border-color: var(--accent-cyan);
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-secondary) !important;
+  border-radius: 6px !important;
+  padding: 5px 12px !important;
+  margin: 0 2px !important;
+  transition: all var(--transition);
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: rgba(0,212,255,0.1) !important;
+  border-color: var(--accent-cyan) !important;
+  color: var(--accent-cyan) !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+  background: var(--grad-cyan-purple) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+table.dataTable thead th {
+  border-bottom: 1px solid var(--border) !important;
+}
+table.dataTable tbody td {
+  border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+}
+
+/* Document Preview Modal */
+.preview-modal-body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 350px;
+  max-height: 75vh;
+  overflow: auto;
+  background: #03060c;
+  padding: 16px;
+  border-radius: 8px;
+}
+.preview-modal-body img {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 4px;
+}
+.preview-modal-body iframe {
+  width: 100%;
+  height: 70vh;
+  border: none;
+  border-radius: 4px;
+}
+
 
