@@ -1,7 +1,11 @@
 <?php
 /**
- * Internet Cafe Diary - CRUD API
- * JSON-based Database API for Customer & Session Management
+ * Internet Cafe Diary - System API
+ * Handles:
+ *  - Customer & Session CRUD
+ *  - System Settings (Branding, Logo, Dynamic Storage Directories, SMTP)
+ *  - Multi-Directory Document Scanning & Management
+ *  - SMTP Connection Testing
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -9,7 +13,7 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
@@ -21,6 +25,7 @@ define('BASE_DIR',       dirname(dirname(__DIR__))); // InternetCafeDiary root
 define('DATA_DIR',       __DIR__ . '/../data/');
 define('CUSTOMERS_FILE', DATA_DIR . 'customers.json');
 define('SESSIONS_FILE',  DATA_DIR . 'sessions.json');
+define('SETTINGS_FILE',  DATA_DIR . 'settings.json');
 
 // ──────────────────────────────────────────────
 // HELPER FUNCTIONS
@@ -32,6 +37,7 @@ function readJson($file) {
 }
 
 function writeJson($file, $data) {
+    if (!isset($data['meta'])) $data['meta'] = [];
     $data['meta']['last_updated'] = date('c');
     return file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 }
@@ -54,33 +60,327 @@ function sanitizeFolderName($name) {
     return $name;
 }
 
-// Scan physical folders in InternetCafeDiary root
-function scanPhysicalFolders() {
-    $rootDir  = BASE_DIR;
-    $excluded = ['.base', '.', '..', '.git'];
-    $folders  = [];
-    if (is_dir($rootDir)) {
-        foreach (scandir($rootDir) as $item) {
-            if (!in_array($item, $excluded) && is_dir($rootDir . DIRECTORY_SEPARATOR . $item)) {
+// ── SETTINGS HELPERS ──────────────────────────
+function getSettings() {
+    $settings = readJson(SETTINGS_FILE);
+    if (empty($settings['general'])) {
+        $settings['general'] = [
+            'site_title'      => 'Internet Cafe Diary',
+            'tagline'         => 'Customer & Cafe Management System',
+            'owner_name'      => 'Admin',
+            'phone'           => '9876543210',
+            'email'           => 'cafe@example.com',
+            'address'         => 'Main Market Road',
+            'currency_symbol' => '₹',
+            'logo_type'       => 'icon',
+            'logo_icon'       => '🖥️',
+            'logo_url'        => ''
+        ];
+    }
+    if (empty($settings['storage']['directories'])) {
+        $settings['storage'] = [
+            'default_directory_id' => 'dir_root',
+            'directories' => [
+                [
+                    'id'         => 'dir_root',
+                    'name'       => 'Default Root Directory',
+                    'path'       => BASE_DIR,
+                    'is_active'  => true,
+                    'is_default' => true,
+                    'created_at' => date('Y-m-d')
+                ]
+            ]
+        ];
+    }
+    if (empty($settings['smtp'])) {
+        $settings['smtp'] = [
+            'host'       => 'smtp.gmail.com',
+            'port'       => 587,
+            'username'   => '',
+            'password'   => '',
+            'encryption' => 'tls',
+            'from_email' => '',
+            'from_name'  => 'Internet Cafe Diary',
+            'enabled'    => false
+        ];
+    }
+    return $settings;
+}
+
+function getStorageDirectories() {
+    $settings = getSettings();
+    return $settings['storage']['directories'] ?? [];
+}
+
+function getDefaultStorageDirectory() {
+    $settings = getSettings();
+    $defId = $settings['storage']['default_directory_id'] ?? 'dir_root';
+    foreach ($settings['storage']['directories'] ?? [] as $dir) {
+        if ($dir['id'] === $defId && ($dir['is_active'] ?? true)) {
+            return $dir;
+        }
+    }
+    // Fallback to first active directory or BASE_DIR
+    foreach ($settings['storage']['directories'] ?? [] as $dir) {
+        if ($dir['is_active'] ?? true) return $dir;
+    }
+    return [
+        'id'         => 'dir_root',
+        'name'       => 'Default Root Directory',
+        'path'       => BASE_DIR,
+        'is_active'  => true,
+        'is_default' => true
+    ];
+}
+
+// Scan physical folders across all active storage directories
+function scanAllDirectories() {
+    $dirs = getStorageDirectories();
+    $excluded = ['.base', '.', '..', '.git', 'desktop.ini'];
+    $results = [];
+
+    foreach ($dirs as $dirConfig) {
+        if (!($dirConfig['is_active'] ?? true)) continue;
+        $dirPath = rtrim($dirConfig['path'], '\\/');
+        if (!is_dir($dirPath)) continue;
+
+        $items = @scandir($dirPath) ?: [];
+        foreach ($items as $item) {
+            if (in_array($item, $excluded)) continue;
+            $fullPath = $dirPath . DIRECTORY_SEPARATOR . $item;
+            if (is_dir($fullPath)) {
                 $files = [];
-                foreach (scandir($rootDir . DIRECTORY_SEPARATOR . $item) as $f) {
-                    if ($f !== '.' && $f !== '..') $files[] = $f;
+                $fileItems = @scandir($fullPath) ?: [];
+                foreach ($fileItems as $f) {
+                    if (!in_array($f, ['.', '..', 'desktop.ini'])) {
+                        $files[] = $f;
+                    }
                 }
-                $folders[] = ['folder' => $item, 'files' => $files, 'count' => count($files)];
+                $results[] = [
+                    'folder'       => $item,
+                    'files'        => $files,
+                    'count'        => count($files),
+                    'storage_id'   => $dirConfig['id'],
+                    'storage_name' => $dirConfig['name'],
+                    'full_path'    => $fullPath
+                ];
             }
         }
     }
-    return $folders;
+    return $results;
 }
 
 // ──────────────────────────────────────────────
 // ROUTER
 // ──────────────────────────────────────────────
-$method   = $_SERVER['REQUEST_METHOD'];
+$method   = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $action   = $_GET['action']   ?? '';
 $resource = $_GET['resource'] ?? 'customers';
 $id       = $_GET['id']       ?? null;
 $body     = json_decode(file_get_contents('php://input'), true) ?? [];
+
+// ── SETTINGS RESOURCE ─────────────────────────
+if ($resource === 'settings') {
+    $settings = getSettings();
+
+    // GET settings
+    if ($method === 'GET') {
+        respond(['success' => true, 'data' => $settings]);
+    }
+
+    // UPDATE general or smtp settings
+    if ($method === 'POST' || $method === 'PUT') {
+        if ($action === 'test_directory') {
+            $testPath = trim($body['path'] ?? '');
+            if (!$testPath) respond(['success' => false, 'message' => 'Path is required'], 400);
+
+            $exists   = is_dir($testPath);
+            $writable = is_writable($testPath);
+            $canCreate = false;
+
+            if (!$exists) {
+                // Check if parent directory is writable to create it safely
+                $parent = dirname($testPath);
+                $canCreate = is_dir($parent) && is_writable($parent);
+            }
+
+            respond([
+                'success'    => $exists || $canCreate,
+                'exists'     => $exists,
+                'writable'   => $writable,
+                'can_create' => $canCreate,
+                'message'    => $exists ? 'Directory exists and is ready' : ($canCreate ? 'Directory does not exist but can be created' : 'Directory does not exist and cannot be created (check permissions)')
+            ]);
+        }
+
+        if ($action === 'add_directory') {
+            $name = trim($body['name'] ?? '');
+            $path = trim($body['path'] ?? '');
+            $setDef = !empty($body['is_default']);
+
+            if (!$name || !$path) respond(['success' => false, 'message' => 'Name and Path are required'], 400);
+
+            // Create directory if it does not exist
+            if (!is_dir($path)) {
+                if (!@mkdir($path, 0755, true)) {
+                    respond(['success' => false, 'message' => 'Directory path could not be created. Please verify disk/folder permissions.'], 400);
+                }
+            }
+
+            $newDirId = 'dir_' . substr(md5(uniqid()), 0, 8);
+            $newDir = [
+                'id'         => $newDirId,
+                'name'       => $name,
+                'path'       => $path,
+                'is_active'  => true,
+                'is_default' => $setDef,
+                'created_at' => date('Y-m-d')
+            ];
+
+            if ($setDef) {
+                foreach ($settings['storage']['directories'] as &$d) {
+                    $d['is_default'] = false;
+                }
+                $settings['storage']['default_directory_id'] = $newDirId;
+            }
+
+            $settings['storage']['directories'][] = $newDir;
+            writeJson(SETTINGS_FILE, $settings);
+            respond(['success' => true, 'data' => $newDir, 'message' => 'Storage location added successfully!']);
+        }
+
+        if ($action === 'remove_directory') {
+            $removeId = $body['id'] ?? $id;
+            if (!$removeId) respond(['success' => false, 'message' => 'Directory ID required'], 400);
+
+            if ($removeId === ($settings['storage']['default_directory_id'] ?? '')) {
+                respond(['success' => false, 'message' => 'Cannot delete the default storage location. Please set another location as default first.'], 400);
+            }
+
+            $settings['storage']['directories'] = array_values(array_filter(
+                $settings['storage']['directories'], fn($d) => $d['id'] !== $removeId
+            ));
+            writeJson(SETTINGS_FILE, $settings);
+            respond(['success' => true, 'message' => 'Storage directory removed']);
+        }
+
+        if ($action === 'set_default_directory') {
+            $defId = $body['id'] ?? $id;
+            if (!$defId) respond(['success' => false, 'message' => 'Directory ID required'], 400);
+
+            $found = false;
+            foreach ($settings['storage']['directories'] as &$d) {
+                if ($d['id'] === $defId) {
+                    $d['is_default'] = true;
+                    $d['is_active']  = true;
+                    $found = true;
+                } else {
+                    $d['is_default'] = false;
+                }
+            }
+            if (!$found) respond(['success' => false, 'message' => 'Directory not found'], 404);
+
+            $settings['storage']['default_directory_id'] = $defId;
+            writeJson(SETTINGS_FILE, $settings);
+            respond(['success' => true, 'message' => 'Default storage location updated!']);
+        }
+
+        if ($action === 'toggle_directory_status') {
+            $toggleId = $body['id'] ?? $id;
+            foreach ($settings['storage']['directories'] as &$d) {
+                if ($d['id'] === $toggleId) {
+                    if ($d['is_default'] && ($d['is_active'] ?? true)) {
+                        respond(['success' => false, 'message' => 'Cannot deactivate the default storage directory.'], 400);
+                    }
+                    $d['is_active'] = !($d['is_active'] ?? true);
+                    writeJson(SETTINGS_FILE, $settings);
+                    respond(['success' => true, 'is_active' => $d['is_active'], 'message' => 'Status updated']);
+                }
+            }
+            respond(['success' => false, 'message' => 'Directory not found'], 404);
+        }
+
+        if ($action === 'test_smtp') {
+            $host = trim($body['host'] ?? $settings['smtp']['host'] ?? '');
+            $port = intval($body['port'] ?? $settings['smtp']['port'] ?? 587);
+            $enc  = strtolower($body['encryption'] ?? $settings['smtp']['encryption'] ?? 'tls');
+
+            if (!$host || !$port) {
+                respond(['success' => false, 'message' => 'SMTP Host and Port are required'], 400);
+            }
+
+            $protocol = ($enc === 'ssl') ? 'ssl://' : '';
+            $target   = $protocol . $host;
+            $timeout  = 5;
+
+            $fp = @fsockopen($target, $port, $errno, $errstr, $timeout);
+            if (!$fp) {
+                respond([
+                    'success' => false,
+                    'message' => "SMTP Connection failed: $errstr (Code: $errno)"
+                ], 400);
+            }
+
+            // Read banner
+            $response = fgets($fp, 515);
+            fclose($fp);
+
+            respond([
+                'success' => true,
+                'message' => "Connection successful! Server response: " . trim($response)
+            ]);
+        }
+
+        // Generic settings save (general, smtp)
+        if (isset($body['general'])) {
+            $settings['general'] = array_merge($settings['general'] ?? [], $body['general']);
+        }
+        if (isset($body['smtp'])) {
+            $settings['smtp'] = array_merge($settings['smtp'] ?? [], $body['smtp']);
+        }
+        writeJson(SETTINGS_FILE, $settings);
+        respond(['success' => true, 'data' => $settings, 'message' => 'Settings updated successfully!']);
+    }
+}
+
+// ── SYSTEM INFO RESOURCE ──────────────────────
+if ($resource === 'system_info') {
+    $settings = getSettings();
+    $diskInfo = [];
+    foreach ($settings['storage']['directories'] ?? [] as $dir) {
+        $p = $dir['path'];
+        if (is_dir($p)) {
+            $free  = @disk_free_space($p);
+            $total = @disk_total_space($p);
+            $diskInfo[] = [
+                'id'       => $dir['id'],
+                'name'     => $dir['name'],
+                'path'     => $p,
+                'free_gb'  => $free ? round($free / (1024 * 1024 * 1024), 2) : 'N/A',
+                'total_gb' => $total ? round($total / (1024 * 1024 * 1024), 2) : 'N/A',
+                'exists'   => true
+            ];
+        } else {
+            $diskInfo[] = [
+                'id'     => $dir['id'],
+                'name'   => $dir['name'],
+                'path'   => $p,
+                'exists' => false
+            ];
+        }
+    }
+
+    respond([
+        'success'      => true,
+        'php_version'  => PHP_VERSION,
+        'server_os'    => PHP_OS_FAMILY,
+        'server_soft'  => $_SERVER['SERVER_SOFTWARE'] ?? 'PHP CLI Server',
+        'upload_max'   => ini_get('upload_max_filesize'),
+        'post_max'     => ini_get('post_max_size'),
+        'memory_limit' => ini_get('memory_limit'),
+        'storage_disks'=> $diskInfo
+    ]);
+}
 
 // ── CUSTOMERS ─────────────────────────────────
 if ($resource === 'customers') {
@@ -92,15 +392,17 @@ if ($resource === 'customers') {
         $search = strtolower($_GET['search'] ?? '');
         $year   = $_GET['year']   ?? '';
         $status = $_GET['status'] ?? '';
+        $dirId  = $_GET['directory_id'] ?? '';
 
-        $filtered = array_filter($customers, function($c) use ($search, $year, $status) {
+        $filtered = array_filter($customers, function($c) use ($search, $year, $status, $dirId) {
             $matchSearch = !$search ||
                 str_contains(strtolower($c['name']), $search) ||
                 str_contains(strtolower($c['phone'] ?? ''), $search) ||
                 str_contains(strtolower($c['aadhar'] ?? ''), $search);
             $matchYear   = !$year   || ($c['created_year'] ?? '') === $year;
             $matchStatus = !$status || ($c['status'] ?? '') === $status;
-            return $matchSearch && $matchYear && $matchStatus;
+            $matchDir    = !$dirId  || ($c['storage_dir_id'] ?? 'dir_root') === $dirId;
+            return $matchSearch && $matchYear && $matchStatus && $matchDir;
         });
 
         // Sort by name
@@ -123,30 +425,54 @@ if ($resource === 'customers') {
         $folderName = sanitizeFolderName($body['name']);
         $newId      = generateId('CUST', $year);
 
-        // Create physical folder
-        $folderPath = BASE_DIR . DIRECTORY_SEPARATOR . $folderName;
-        if (!is_dir($folderPath)) mkdir($folderPath, 0755, true);
+        // Determine destination storage directory
+        $reqDirId   = $body['storage_dir_id'] ?? null;
+        $targetDir  = null;
+        $dirs       = getStorageDirectories();
+
+        if ($reqDirId) {
+            foreach ($dirs as $d) {
+                if ($d['id'] === $reqDirId && ($d['is_active'] ?? true)) {
+                    $targetDir = $d;
+                    break;
+                }
+            }
+        }
+        if (!$targetDir) {
+            $targetDir = getDefaultStorageDirectory();
+        }
+
+        $baseStoragePath = rtrim($targetDir['path'], '\\/');
+        $folderPath      = $baseStoragePath . DIRECTORY_SEPARATOR . $folderName;
+
+        // Create physical customer folder in selected storage location
+        if (!is_dir($folderPath)) {
+            @mkdir($folderPath, 0755, true);
+        }
 
         $newCustomer = [
-            'id'           => $newId,
-            'name'         => strtoupper(trim($body['name'])),
-            'folder_name'  => $folderName,
-            'phone'        => $body['phone']   ?? '',
-            'address'      => $body['address'] ?? '',
-            'aadhar'       => $body['aadhar']  ?? '',
-            'created_date' => date('Y-m-d'),
-            'created_year' => $year,
-            'status'       => 'active',
-            'notes'        => $body['notes']   ?? '',
-            'documents'    => [],
-            'visits'       => []
+            'id'               => $newId,
+            'name'             => strtoupper(trim($body['name'])),
+            'folder_name'      => $folderName,
+            'storage_dir_id'   => $targetDir['id'],
+            'storage_dir_name' => $targetDir['name'],
+            'storage_path'     => $folderPath,
+            'phone'            => $body['phone']   ?? '',
+            'address'          => $body['address'] ?? '',
+            'aadhar'           => $body['aadhar']  ?? '',
+            'created_date'     => date('Y-m-d'),
+            'created_year'     => $year,
+            'status'           => 'active',
+            'notes'            => $body['notes']   ?? '',
+            'documents'        => [],
+            'visits'           => []
         ];
 
         $db['customers'][] = $newCustomer;
         $db['meta']['total_customers'] = count($db['customers']);
         writeJson(CUSTOMERS_FILE, $db);
 
-        respond(['success' => true, 'data' => $newCustomer, 'message' => 'Customer created successfully'], 201);
+        respond(['success' => true, 'data' => $newCustomer, 'message' => "Customer created in {$targetDir['name']}"], 201);
     }
 
     // UPDATE
@@ -257,9 +583,9 @@ if ($resource === 'sessions') {
     }
 }
 
-// ── FOLDERS (physical scan) ───────────────────
+// ── FOLDERS (Multi-Directory Physical Scan) ───
 if ($resource === 'folders') {
-    respond(['success' => true, 'data' => scanPhysicalFolders()]);
+    respond(['success' => true, 'data' => scanAllDirectories()]);
 }
 
 // ── STATS ─────────────────────────────────────
