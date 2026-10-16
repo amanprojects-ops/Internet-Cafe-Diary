@@ -27,6 +27,9 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
+  <!-- Font Awesome 6 Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
@@ -43,7 +46,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
   <!-- ── SIDEBAR ─────────────────────────────────────────────── -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
-      <div class="logo-icon" id="sidebarLogoIcon">🖥️</div>
+      <div class="logo-icon" id="sidebarLogoIcon"><i class="fa-solid fa-desktop"></i></div>
       <div class="logo-text">
         <span id="sidebarShopTitle" style="font-size:13px;font-weight:700;display:block;color:var(--text-primary);letter-spacing:0;">Internet Cafe</span>
         <span id="sidebarTagline">Diary System</span>
@@ -54,37 +57,37 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
       <div class="nav-section-label">Main Menu</div>
 
       <div class="nav-item active" data-page="dashboard" id="nav-dashboard">
-        <span class="nav-icon">📊</span>
+        <span class="nav-icon"><i class="fa-solid fa-gauge-high"></i></span>
         <span>Dashboard</span>
       </div>
 
       <div class="nav-item" data-page="customers" id="nav-customers">
-        <span class="nav-icon">👥</span>
+        <span class="nav-icon"><i class="fa-solid fa-users"></i></span>
         <span>Customers</span>
         <span class="nav-badge" id="badge-customers">0</span>
       </div>
 
       <div class="nav-item" data-page="sessions" id="nav-sessions">
-        <span class="nav-icon">⏱️</span>
+        <span class="nav-icon"><i class="fa-solid fa-clock"></i></span>
         <span>Sessions</span>
       </div>
 
       <div class="nav-section-label" style="margin-top:12px;">Files & Reports</div>
 
       <div class="nav-item" data-page="documents" id="nav-documents">
-        <span class="nav-icon">📁</span>
+        <span class="nav-icon"><i class="fa-solid fa-folder-open"></i></span>
         <span>Documents</span>
       </div>
 
       <div class="nav-item" data-page="reports" id="nav-reports">
-        <span class="nav-icon">📈</span>
+        <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span>
         <span>Reports</span>
       </div>
 
       <div class="nav-section-label" style="margin-top:12px;">Administration</div>
 
       <div class="nav-item" data-page="settings" id="nav-settings">
-        <span class="nav-icon">⚙️</span>
+        <span class="nav-icon"><i class="fa-solid fa-gear"></i></span>
         <span>System Manager</span>
       </div>
     </nav>
@@ -105,17 +108,17 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
 
     <!-- TOP HEADER -->
     <header class="top-header">
-      <button class="btn-icon" id="menuToggle" style="display:none;" aria-label="Menu">☰</button>
-      <div class="header-title" id="topHeaderTitle">🖥️ Internet Cafe Diary</div>
+      <button class="btn-icon" id="menuToggle" style="display:none;" aria-label="Menu"><i class="fa-solid fa-bars"></i></button>
+      <div class="header-title" id="topHeaderTitle"><i class="fa-solid fa-desktop"></i> Internet Cafe Diary</div>
 
       <div class="header-search">
-        <span class="search-icon">🔍</span>
+        <span class="search-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
         <input type="text" id="headerSearch" placeholder="Search customers..." autocomplete="off">
       </div>
 
       <div class="header-actions">
         <span class="date-display" id="dateDisplay"><?= date('D, d M Y  H:i:s') ?></span>
-        <button class="btn btn-primary btn-sm" onclick="openCustomerModal()">➕ New Customer</button>
+        <button class="btn btn-primary btn-sm" onclick="openCustomerModal()"><i class="fa-solid fa-user-plus"></i> New Customer</button>
       </div>
     </header>
 
@@ -127,8 +130,8 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
            ════════════════════════════════════════════════════════ -->
       <section class="page active" id="page-dashboard">
         <div class="page-header">
-          <h2>📊 Dashboard <span>Overview</span></h2>
-          <button class="btn btn-secondary btn-sm" onclick="loadDashboard()">🔄 Refresh</button>
+          <h2><i class="fa-solid fa-gauge-high"></i> Dashboard <span>Overview</span></h2>
+          <button class="btn btn-secondary btn-sm" onclick="loadDashboard()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
         </div>
 
         <!-- Stats -->
@@ -141,8 +144,8 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
           <!-- Recent Customers -->
           <div class="card">
             <div class="card-header">
-              <h3>👥 Recent Customers</h3>
-              <button class="btn btn-secondary btn-sm" onclick="navigateTo('customers')">View All →</button>
+              <h3><i class="fa-solid fa-users"></i> Recent Customers</h3>
+              <button class="btn btn-secondary btn-sm" onclick="navigateTo('customers')">View All <i class="fa-solid fa-arrow-right"></i></button>
             </div>
             <div id="dash-recent-customers">
               <div class="loading-overlay"><div class="spinner"></div></div>
@@ -152,7 +155,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
           <!-- Customers by Year Chart -->
           <div class="card">
             <div class="card-header">
-              <h3>📅 Customers by Year</h3>
+              <h3><i class="fa-solid fa-calendar-days"></i> Customers by Year</h3>
             </div>
             <div class="card-body">
               <div class="chart-container">
@@ -165,8 +168,8 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
         <!-- Recent Sessions -->
         <div class="card">
           <div class="card-header">
-            <h3>⏱️ Recent Sessions</h3>
-            <button class="btn btn-secondary btn-sm" onclick="navigateTo('sessions')">View All →</button>
+            <h3><i class="fa-solid fa-clock-rotate-left"></i> Recent Sessions</h3>
+            <button class="btn btn-secondary btn-sm" onclick="navigateTo('sessions')">View All <i class="fa-solid fa-arrow-right"></i></button>
           </div>
           <div id="dash-recent-sessions">
             <div class="loading-overlay"><div class="spinner"></div></div>
@@ -182,14 +185,14 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
         <!-- List View -->
         <div id="customers-list-view">
           <div class="page-header">
-            <h2>👥 Customers <span id="cust-count">(0)</span></h2>
-            <button class="btn btn-primary" onclick="openCustomerModal()">➕ Add Customer</button>
+            <h2><i class="fa-solid fa-users"></i> Customers <span id="cust-count">(0)</span></h2>
+            <button class="btn btn-primary" onclick="openCustomerModal()"><i class="fa-solid fa-user-plus"></i> Add Customer</button>
           </div>
 
           <!-- Filters -->
           <div class="filters-bar">
             <div class="search-wrap">
-              <span class="si">🔍</span>
+              <span class="si"><i class="fa-solid fa-magnifying-glass"></i></span>
               <input type="text" class="search-input-bar" id="custSearch" placeholder="Search by name, phone, aadhar...">
             </div>
             <select class="filter-select" id="filterYear">
@@ -206,7 +209,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
             <select class="filter-select" id="filterCustomerDir">
               <option value="">All Locations</option>
             </select>
-            <button class="btn btn-secondary btn-sm" onclick="loadCustomers()">🔄 Refresh</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadCustomers()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
           </div>
 
           <div class="card">
@@ -219,8 +222,8 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
         <!-- Detail View (hidden by default) -->
         <div id="customers-detail-view" class="hidden">
           <div class="page-header">
-            <h2>👤 Customer Detail</h2>
-            <button class="btn btn-secondary btn-sm" onclick="backToCustomers()">← Back to List</button>
+            <h2><i class="fa-solid fa-id-card"></i> Customer Detail</h2>
+            <button class="btn btn-secondary btn-sm" onclick="backToCustomers()"><i class="fa-solid fa-arrow-left"></i> Back to List</button>
           </div>
           <div id="customer-detail-content"></div>
         </div>
@@ -231,13 +234,13 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
            ════════════════════════════════════════════════════════ -->
       <section class="page" id="page-sessions">
         <div class="page-header">
-          <h2>⏱️ Sessions</h2>
-          <button class="btn btn-primary" onclick="openSessionModal()">➕ New Session</button>
+          <h2><i class="fa-solid fa-clock"></i> Sessions</h2>
+          <button class="btn btn-primary" onclick="openSessionModal()"><i class="fa-solid fa-plus"></i> New Session</button>
         </div>
 
         <div class="filters-bar">
           <div class="search-wrap">
-            <span class="si">🔍</span>
+            <span class="si"><i class="fa-solid fa-magnifying-glass"></i></span>
             <input type="text" class="search-input-bar" id="sesSearch" placeholder="Search by customer name...">
           </div>
           <select class="filter-select" id="sesFilterYear">
@@ -247,7 +250,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
             <?php endforeach; ?>
           </select>
           <input type="date" class="filter-select" id="sesFilterDate" value="" style="cursor:pointer;">
-          <button class="btn btn-secondary btn-sm" onclick="loadSessions()">🔄 Refresh</button>
+          <button class="btn btn-secondary btn-sm" onclick="loadSessions()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
         </div>
 
         <div class="card">
@@ -262,12 +265,12 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
            ════════════════════════════════════════════════════════ -->
       <section class="page" id="page-documents">
         <div class="page-header">
-          <h2>📁 Documents <span>Multi-Directory Scan</span></h2>
+          <h2><i class="fa-solid fa-folder-open"></i> Documents <span>Multi-Directory Scan</span></h2>
           <div class="flex gap-2">
             <select class="filter-select" id="filterDocLocation" onchange="filterDocumentsByLocation()">
               <option value="">All Storage Locations</option>
             </select>
-            <button class="btn btn-secondary btn-sm" onclick="loadDocuments()">🔄 Rescan</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadDocuments()"><i class="fa-solid fa-arrows-rotate"></i> Rescan</button>
           </div>
         </div>
         <p class="text-muted text-sm mb-4">
@@ -283,13 +286,13 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
            ════════════════════════════════════════════════════════ -->
       <section class="page" id="page-reports">
         <div class="page-header">
-          <h2>📈 Reports — <?= $currentYear ?></h2>
-          <button class="btn btn-secondary btn-sm" onclick="loadReports()">🔄 Refresh</button>
+          <h2><i class="fa-solid fa-chart-line"></i> Reports — <?= $currentYear ?></h2>
+          <button class="btn btn-secondary btn-sm" onclick="loadReports()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
         </div>
 
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;">
           <div class="card">
-            <div class="card-header"><h3>💰 Monthly Revenue (<?= $currentYear ?>)</h3></div>
+            <div class="card-header"><h3><i class="fa-solid fa-chart-column"></i> Monthly Revenue (<?= $currentYear ?>)</h3></div>
             <div class="card-body">
               <div class="chart-container" id="monthly-chart-container">
                 <div class="loading-overlay"><div class="spinner"></div></div>
@@ -298,7 +301,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
           </div>
 
           <div class="card">
-            <div class="card-header"><h3>🛠️ Services Breakdown</h3></div>
+            <div class="card-header"><h3><i class="fa-solid fa-chart-pie"></i> Services Breakdown</h3></div>
             <div class="card-body" id="service-breakdown">
               <div class="spinner"></div>
             </div>
@@ -311,22 +314,22 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
            ════════════════════════════════════════════════════════ -->
       <section class="page" id="page-settings">
         <div class="page-header">
-          <h2>⚙️ System Manager <span>Branding, Dynamic Storage & SMTP</span></h2>
-          <button class="btn btn-secondary btn-sm" onclick="loadSettings()">🔄 Refresh Settings</button>
+          <h2><i class="fa-solid fa-gear"></i> System Manager <span>Branding, Dynamic Storage & SMTP</span></h2>
+          <button class="btn btn-secondary btn-sm" onclick="loadSettings()"><i class="fa-solid fa-arrows-rotate"></i> Refresh Settings</button>
         </div>
 
         <div class="settings-tabs">
-          <div class="settings-tab active" data-tab="general">🌐 Branding & Shop Info</div>
-          <div class="settings-tab" data-tab="storage">📁 Dynamic Storage Locations</div>
-          <div class="settings-tab" data-tab="smtp">📧 Email SMTP Setup</div>
-          <div class="settings-tab" data-tab="system">ℹ️ System Status</div>
+          <div class="settings-tab active" data-tab="general"><i class="fa-solid fa-globe"></i> Branding & Shop Info</div>
+          <div class="settings-tab" data-tab="storage"><i class="fa-solid fa-hard-drive"></i> Dynamic Storage Locations</div>
+          <div class="settings-tab" data-tab="smtp"><i class="fa-solid fa-envelope"></i> Email SMTP Setup</div>
+          <div class="settings-tab" data-tab="system"><i class="fa-solid fa-circle-info"></i> System Status</div>
         </div>
 
         <!-- ── TAB 1: General Branding ────────────────────────── -->
         <div class="settings-section active" id="tab-general">
           <div class="card">
             <div class="card-header">
-              <h3>🌐 Website Branding & Cafe Profile</h3>
+              <h3><i class="fa-solid fa-globe"></i> Website Branding & Cafe Profile</h3>
             </div>
             <div class="card-body">
               <form id="generalSettingsForm">
@@ -368,13 +371,13 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
                   <div class="form-group">
                     <label class="form-label">Logo Type</label>
                     <select class="form-control" name="logo_type" id="logoTypeSelect">
-                      <option value="icon">Emoji / Icon</option>
+                      <option value="icon">Font Awesome Icon Class</option>
                       <option value="image">Custom Image URL</option>
                     </select>
                   </div>
                   <div class="form-group" id="logoIconGroup">
-                    <label class="form-label">Logo Icon / Emoji</label>
-                    <input class="form-control" type="text" name="logo_icon" placeholder="🖥️" maxlength="10">
+                    <label class="form-label">Icon Class (Font Awesome)</label>
+                    <input class="form-control font-mono" type="text" name="logo_icon" placeholder="fa-solid fa-desktop">
                   </div>
                   <div class="form-group hidden" id="logoUrlGroup">
                     <label class="form-label">Logo Image URL</label>
@@ -382,7 +385,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
                   </div>
                 </div>
                 <div class="mt-4">
-                  <button type="submit" class="btn btn-primary">💾 Save Branding Settings</button>
+                  <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Branding Settings</button>
                 </div>
               </form>
             </div>
@@ -394,10 +397,10 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
           <div class="card mb-4">
             <div class="card-header">
               <div>
-                <h3>📁 Dynamic Storage Directories</h3>
+                <h3><i class="fa-solid fa-hard-drive"></i> Dynamic Storage Directories</h3>
                 <p class="text-muted text-sm mt-4">Add and manage multiple drive locations or folders where customer files are stored.</p>
               </div>
-              <button class="btn btn-primary btn-sm" onclick="openDirectoryModal()">➕ Add Storage Location</button>
+              <button class="btn btn-primary btn-sm" onclick="openDirectoryModal()"><i class="fa-solid fa-folder-plus"></i> Add Storage Location</button>
             </div>
             <div class="card-body">
               <div id="storage-directories-list">
@@ -411,8 +414,8 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
         <div class="settings-section" id="tab-smtp">
           <div class="card">
             <div class="card-header">
-              <h3>📧 Email SMTP Configuration</h3>
-              <span class="badge badge-cyan">Email Notifications</span>
+              <h3><i class="fa-solid fa-envelope"></i> Email SMTP Configuration</h3>
+              <span class="badge badge-cyan"><i class="fa-solid fa-bell"></i> Notifications</span>
             </div>
             <div class="card-body">
               <form id="smtpSettingsForm">
@@ -464,8 +467,8 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
                   </div>
                 </div>
                 <div class="flex gap-2 mt-4">
-                  <button type="submit" class="btn btn-primary">💾 Save SMTP Settings</button>
-                  <button type="button" class="btn btn-secondary" onclick="testSmtpConnection()">🔌 Test SMTP Connection</button>
+                  <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save SMTP Settings</button>
+                  <button type="button" class="btn btn-secondary" onclick="testSmtpConnection()"><i class="fa-solid fa-network-wired"></i> Test SMTP Connection</button>
                 </div>
               </form>
             </div>
@@ -475,7 +478,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
         <!-- ── TAB 4: System Information ───────────────────────── -->
         <div class="settings-section" id="tab-system">
           <div class="card mb-4">
-            <div class="card-header"><h3>ℹ️ System & Server Diagnostics</h3></div>
+            <div class="card-header"><h3><i class="fa-solid fa-circle-info"></i> System & Server Diagnostics</h3></div>
             <div class="card-body">
               <div id="system-info-content">
                 <div class="loading-overlay"><div class="spinner"></div></div>
@@ -495,8 +498,8 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
 <div class="modal-overlay" id="customerModal">
   <div class="modal">
     <div class="modal-header">
-      <h3 id="customerModalTitle">➕ Add New Customer</h3>
-      <button class="modal-close" onclick="closeModal('customerModal')" aria-label="Close">✕</button>
+      <h3 id="customerModalTitle"><i class="fa-solid fa-user-plus"></i> Add New Customer</h3>
+      <button class="modal-close" onclick="closeModal('customerModal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <form id="customerForm" novalidate>
       <div class="modal-body">
@@ -540,7 +543,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeModal('customerModal')">Cancel</button>
-        <button type="submit" class="btn btn-primary">💾 Save Customer</button>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Customer</button>
       </div>
     </form>
   </div>
@@ -552,8 +555,8 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
 <div class="modal-overlay" id="directoryModal">
   <div class="modal">
     <div class="modal-header">
-      <h3>📁 Add Dynamic Storage Location</h3>
-      <button class="modal-close" onclick="closeModal('directoryModal')" aria-label="Close">✕</button>
+      <h3><i class="fa-solid fa-folder-plus"></i> Add Dynamic Storage Location</h3>
+      <button class="modal-close" onclick="closeModal('directoryModal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <form id="directoryForm" novalidate>
       <div class="modal-body">
@@ -567,7 +570,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
           <small class="text-muted" style="display:block;margin-top:4px;">Enter a valid folder path on any disk or drive.</small>
         </div>
         <div class="form-group">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="testDirectoryPath()">🔍 Check Path</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="testDirectoryPath()"><i class="fa-solid fa-magnifying-glass"></i> Check Path</button>
           <span id="dirTestResult" class="text-sm" style="margin-left:10px;"></span>
         </div>
         <div class="form-group">
@@ -579,7 +582,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeModal('directoryModal')">Cancel</button>
-        <button type="submit" class="btn btn-primary">💾 Add Location</button>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Add Location</button>
       </div>
     </form>
   </div>
@@ -591,8 +594,8 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
 <div class="modal-overlay" id="sessionModal">
   <div class="modal">
     <div class="modal-header">
-      <h3>➕ Add New Session</h3>
-      <button class="modal-close" onclick="closeModal('sessionModal')" aria-label="Close">✕</button>
+      <h3><i class="fa-solid fa-clock"></i> Add New Session</h3>
+      <button class="modal-close" onclick="closeModal('sessionModal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <form id="sessionForm" novalidate>
       <div class="modal-body">
@@ -652,10 +655,10 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
           <div class="form-group">
             <label class="form-label" for="ses-payment">Payment Mode</label>
             <select id="ses-payment" class="form-control" name="payment_mode">
-              <option value="cash">💵 Cash</option>
-              <option value="upi">📱 UPI</option>
-              <option value="credit">💳 Credit</option>
-              <option value="free">🎁 Free</option>
+              <option value="cash">Cash</option>
+              <option value="upi">UPI</option>
+              <option value="credit">Credit</option>
+              <option value="free">Free</option>
             </select>
           </div>
         </div>
@@ -666,7 +669,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeModal('sessionModal')">Cancel</button>
-        <button type="submit" class="btn btn-primary">💾 Save Session</button>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Session</button>
       </div>
     </form>
   </div>
