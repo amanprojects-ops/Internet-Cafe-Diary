@@ -2,6 +2,7 @@
 /**
  * Internet Cafe Diary — Main Dashboard & System Manager
  * Place this file in: InternetCafeDiary/.base/index.php
+ * Fully Offline Capable with Local Vendor Assets
  */
 
 $shopName    = 'Internet Cafe Diary';
@@ -18,22 +19,20 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Internet Cafe Diary – Customer, Session & System Management System">
+  <meta name="description" content="Internet Cafe Diary – Customer, Session, Documents & System Management">
   <meta name="theme-color" content="#070b14">
-  <title><?= htmlspecialchars($shopName) ?> — Dashboard & System Manager</title>
+  <title><?= htmlspecialchars($shopName) ?> — Dashboard</title>
 
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <!-- Offline Local Vendor Styles -->
+  <link rel="stylesheet" href="Assets/vendor/fontawesome/css/all.min.css">
+  <link rel="stylesheet" href="Assets/vendor/datatables/datatables.min.css">
 
-  <!-- Font Awesome 6 Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Offline Local Vendor Scripts (jQuery first, then DataTables & ChartJS) -->
+  <script src="Assets/vendor/jquery/jquery.min.js"></script>
+  <script src="Assets/vendor/datatables/datatables.min.js"></script>
+  <script src="Assets/vendor/chartjs/chart.umd.min.js"></script>
 
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-
-  <!-- Dashboard CSS -->
+  <!-- Core Dashboard CSS -->
   <link rel="stylesheet" href="Assets/css/style.css">
 </head>
 <body>
@@ -77,6 +76,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
       <div class="nav-item" data-page="documents" id="nav-documents">
         <span class="nav-icon"><i class="fa-solid fa-folder-open"></i></span>
         <span>Documents</span>
+        <span class="nav-badge" id="badge-documents">0</span>
       </div>
 
       <div class="nav-item" data-page="reports" id="nav-reports">
@@ -261,23 +261,61 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
       </section>
 
       <!-- ════════════════════════════════════════════════════════
-           PAGE: DOCUMENTS
+           PAGE: DOCUMENTS (DATATABLES + CRUD)
            ════════════════════════════════════════════════════════ -->
       <section class="page" id="page-documents">
         <div class="page-header">
-          <h2><i class="fa-solid fa-folder-open"></i> Documents <span>Multi-Directory Scan</span></h2>
+          <h2><i class="fa-solid fa-folder-open"></i> Documents Manager <span id="docs-total-count">(0)</span></h2>
+          <div class="flex gap-2">
+            <button class="btn btn-primary" onclick="openUploadDocModal()"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadDocuments()"><i class="fa-solid fa-arrows-rotate"></i> Rescan</button>
+          </div>
+        </div>
+
+        <!-- View mode tabs & Location filter -->
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div class="flex gap-2">
+            <button class="btn btn-sm btn-secondary active-view" id="viewModeTableBtn" onclick="switchDocViewMode('table')">
+              <i class="fa-solid fa-table-list"></i> Searchable DataTable
+            </button>
+            <button class="btn btn-sm btn-secondary" id="viewModeGridBtn" onclick="switchDocViewMode('grid')">
+              <i class="fa-solid fa-folder-tree"></i> Customer Folder View
+            </button>
+          </div>
           <div class="flex gap-2">
             <select class="filter-select" id="filterDocLocation" onchange="filterDocumentsByLocation()">
               <option value="">All Storage Locations</option>
             </select>
-            <button class="btn btn-secondary btn-sm" onclick="loadDocuments()"><i class="fa-solid fa-arrows-rotate"></i> Rescan</button>
           </div>
         </div>
-        <p class="text-muted text-sm mb-4">
-          Dynamically scanning customer folders from all active storage directories configured in System Manager.
-        </p>
-        <div id="documents-grid">
-          <div class="loading-overlay"><div class="spinner"></div></div>
+
+        <!-- 1. DataTable View (Instant Search, Sort, Pagination) -->
+        <div id="documents-table-container" class="card">
+          <div class="card-body">
+            <div class="table-wrap">
+              <table id="documentsDataTable" class="display" style="width:100%">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Document Name</th>
+                    <th>Customer / Folder</th>
+                    <th>Storage Location</th>
+                    <th>File Size</th>
+                    <th>Modified Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Customer Folder Grid View -->
+        <div id="documents-grid-container" class="hidden">
+          <div id="documents-grid">
+            <div class="loading-overlay"><div class="spinner"></div></div>
+          </div>
         </div>
       </section>
 
@@ -550,6 +588,95 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════
+     MODAL: UPLOAD DOCUMENT (CREATE)
+     ══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="uploadDocModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fa-solid fa-cloud-arrow-up"></i> Upload New Document</h3>
+      <button class="modal-close" onclick="closeModal('uploadDocModal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="uploadDocForm" enctype="multipart/form-data">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Assign To Customer / Folder <span>*</span></label>
+          <select class="form-control" name="customer_id" id="uploadDocCustomerSelect" required>
+            <option value="">— Select Customer —</option>
+          </select>
+        </div>
+        <div class="form-group" id="uploadCustomFolderGroup" style="display:none;">
+          <label class="form-label">Custom Folder Name</label>
+          <input class="form-control font-mono" type="text" name="folder_name" placeholder="FOLDER_NAME">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Select File to Upload <span>*</span></label>
+          <input class="form-control" type="file" name="document" required style="padding:8px;">
+          <small class="text-muted" style="display:block;margin-top:4px;">Supported: PDF, JPG, PNG, DOCX, XLSX, PSD, etc.</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Custom File Name (Optional)</label>
+          <input class="form-control" type="text" name="custom_name" placeholder="Leave empty to use original filename">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('uploadDocModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Upload File</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MODAL: RENAME DOCUMENT (UPDATE)
+     ══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="renameDocModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fa-solid fa-pen-to-square"></i> Rename Document</h3>
+      <button class="modal-close" onclick="closeModal('renameDocModal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="renameDocForm">
+      <div class="modal-body">
+        <input type="hidden" name="path" id="renameDocPath">
+        <div class="form-group">
+          <label class="form-label">Current File Name</label>
+          <input class="form-control font-mono" type="text" id="renameDocOldName" readonly style="opacity:0.7;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">New File Name <span>*</span></label>
+          <input class="form-control font-mono" type="text" name="new_name" id="renameDocNewName" required placeholder="e.g. Aadhar_Card_Final.pdf">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('renameDocModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Save Rename</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MODAL: DOCUMENT PREVIEW (VIEW)
+     ══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="docPreviewModal">
+  <div class="modal" style="max-width:850px;width:95%;">
+    <div class="modal-header">
+      <h3 id="docPreviewTitle"><i class="fa-solid fa-file"></i> Document Preview</h3>
+      <div class="flex items-center gap-2">
+        <a id="docPreviewDownloadBtn" class="btn btn-xs btn-secondary" download><i class="fa-solid fa-download"></i> Download</a>
+        <a id="docPreviewExternalBtn" class="btn btn-xs btn-secondary" target="_blank"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Tab</a>
+        <button class="modal-close" onclick="closeModal('docPreviewModal')" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+    <div class="modal-body" style="padding:10px;">
+      <div class="preview-modal-body" id="docPreviewContent">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
      MODAL: ADD STORAGE DIRECTORY
      ══════════════════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="directoryModal">
@@ -678,7 +805,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
 <!-- Toast Container -->
 <div id="toast-container"></div>
 
-<!-- Main JS -->
+<!-- Main Application JS -->
 <script src="Assets/js/app.js"></script>
 
 </body>
