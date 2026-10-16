@@ -1,5 +1,6 @@
 # Ignore all customer data folders and files in root
 /*
 !.gitignore
+!/README.md
 !/.base/
 !/.base/**
