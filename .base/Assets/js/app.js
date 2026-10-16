@@ -1,6 +1,6 @@
 /**
  * Internet Cafe Diary — Frontend Application JS
- * Handles: Navigation, CRUD Calls, Rendering, Charts, Toasts
+ * Handles: Navigation, CRUD Calls, System Manager, Dynamic Directories, SMTP, Charts, Toasts
  */
 
 // ══════════════════════════════════════════════════════════════
@@ -17,24 +17,36 @@ let state = {
   page: 'dashboard',
   customers: [],
   sessions: [],
+  folders: [],
   stats: {},
+  settings: null,
   selectedCustomer: null,
-  filters: { search: '', year: '', status: '' },
+  filters: { search: '', year: '', status: '', directory_id: '' },
   sesFilters: { search: '', year: '', date: '' },
+  docFilters: { location: '' },
   chart: null
 };
 
 // ══════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   updateClock();
   setInterval(updateClock, 1000);
+
+  // Load Settings First to apply branding
+  await loadSettingsData();
+
   navigateTo('dashboard');
 
   // Nav clicks
   document.querySelectorAll('.nav-item').forEach(el => {
     el.addEventListener('click', () => navigateTo(el.dataset.page));
+  });
+
+  // Settings Tab clicks
+  document.querySelectorAll('.settings-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchSettingsTab(tab.dataset.tab));
   });
 
   // Header search
@@ -51,10 +63,101 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('.sidebar')?.classList.toggle('open');
   });
 
+  // Logo type switch in settings
+  document.getElementById('logoTypeSelect')?.addEventListener('change', (e) => {
+    const isImg = e.target.value === 'image';
+    document.getElementById('logoIconGroup')?.classList.toggle('hidden', isImg);
+    document.getElementById('logoUrlGroup')?.classList.toggle('hidden', !isImg);
+  });
+
   initCustomerForm();
   initSessionForm();
   initFilters();
+  initSettingsForms();
+  initDirectoryForm();
 });
+
+// ══════════════════════════════════════════════════════════════
+// SETTINGS & BRANDING
+// ══════════════════════════════════════════════════════════════
+async function loadSettingsData() {
+  try {
+    const res = await apiGet('settings');
+    if (res.success && res.data) {
+      state.settings = res.data;
+      applySettings(res.data);
+      populateStorageDirectoryDropdowns();
+    }
+  } catch (e) {
+    console.error('Failed to load settings:', e);
+  }
+}
+
+function applySettings(settings) {
+  if (!settings || !settings.general) return;
+  const g = settings.general;
+
+  // Header and Sidebar Title
+  const topTitle = document.getElementById('topHeaderTitle');
+  if (topTitle) topTitle.textContent = `${g.logo_icon || '🖥️'} ${g.site_title || 'Internet Cafe Diary'}`;
+
+  const sidebarTitle = document.getElementById('sidebarShopTitle');
+  if (sidebarTitle) sidebarTitle.textContent = g.site_title || 'Internet Cafe';
+
+  const sidebarTagline = document.getElementById('sidebarTagline');
+  if (sidebarTagline) sidebarTagline.textContent = g.tagline || 'Diary System';
+
+  const sidebarIcon = document.getElementById('sidebarLogoIcon');
+  if (sidebarIcon) {
+    if (g.logo_type === 'image' && g.logo_url) {
+      sidebarIcon.innerHTML = `<img src="${g.logo_url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" alt="Logo">`;
+    } else {
+      sidebarIcon.textContent = g.logo_icon || '🖥️';
+    }
+  }
+
+  // Owner Name
+  const ownerEl = document.getElementById('sidebarOwnerName');
+  if (ownerEl) ownerEl.textContent = g.owner_name || 'Admin';
+
+  const avatarEl = document.getElementById('sidebarUserAvatar');
+  if (avatarEl) avatarEl.textContent = (g.owner_name || 'A').charAt(0).toUpperCase();
+
+  // Currency symbols
+  document.querySelectorAll('.currency-symbol').forEach(el => {
+    el.textContent = g.currency_symbol || '₹';
+  });
+
+  // Update page document title
+  document.title = `${g.site_title || 'Internet Cafe Diary'} — Dashboard`;
+}
+
+function populateStorageDirectoryDropdowns() {
+  const dirs = state.settings?.storage?.directories || [];
+  const activeDirs = dirs.filter(d => d.is_active !== false);
+
+  // Customer Modal Directory Select
+  const custDirSelect = document.getElementById('inp-storage-dir');
+  if (custDirSelect) {
+    custDirSelect.innerHTML = activeDirs.map(d =>
+      `<option value="${d.id}" ${d.is_default ? 'selected' : ''}>${d.name} (${d.path}) ${d.is_default ? '★ Default' : ''}</option>`
+    ).join('');
+  }
+
+  // Customer Filter Directory Select
+  const custFilterSelect = document.getElementById('filterCustomerDir');
+  if (custFilterSelect) {
+    custFilterSelect.innerHTML = '<option value="">All Locations</option>' +
+      dirs.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+  }
+
+  // Documents Location Select
+  const docLocSelect = document.getElementById('filterDocLocation');
+  if (docLocSelect) {
+    docLocSelect.innerHTML = '<option value="">All Storage Locations</option>' +
+      dirs.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+  }
+}
 
 // ══════════════════════════════════════════════════════════════
 // NAVIGATION
@@ -68,14 +171,24 @@ function navigateTo(page) {
   if (pageEl) pageEl.classList.add('active');
   document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
 
-  document.querySelector('.header-title').textContent =
-    { dashboard: '🖥️ Internet Cafe Diary', customers: '👥 Customers', sessions: '⏱️ Sessions', documents: '📁 Documents', reports: '📊 Reports' }[page] || 'Dashboard';
+  const shopTitle = state.settings?.general?.site_title || 'Internet Cafe Diary';
+  const titles = {
+    dashboard: `🖥️ ${shopTitle}`,
+    customers: '👥 Customers',
+    sessions:  '⏱️ Sessions',
+    documents: '📁 Documents Multi-Directory',
+    reports:   '📊 Reports',
+    settings:  '⚙️ System Manager'
+  };
+  const topHeaderTitle = document.getElementById('topHeaderTitle');
+  if (topHeaderTitle) topHeaderTitle.textContent = titles[page] || shopTitle;
 
-  if (page === 'dashboard')  loadDashboard();
-  if (page === 'customers')  loadCustomers();
-  if (page === 'sessions')   loadSessions();
-  if (page === 'documents')  loadDocuments();
-  if (page === 'reports')    loadReports();
+  if (page === 'dashboard') loadDashboard();
+  if (page === 'customers') loadCustomers();
+  if (page === 'sessions')  loadSessions();
+  if (page === 'documents') loadDocuments();
+  if (page === 'reports')   loadReports();
+  if (page === 'settings')  loadSettings();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -98,16 +211,22 @@ async function apiGet(resource, params = {}) {
   return res.json();
 }
 
-async function apiPost(resource, body) {
-  const res = await fetch(`${API}?resource=${resource}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+async function apiPost(resource, body, action = '') {
+  const q = new URLSearchParams({ resource });
+  if (action) q.append('action', action);
+  const res = await fetch(`${API}?${q}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
   });
   return res.json();
 }
 
 async function apiPut(resource, id, body) {
   const res = await fetch(`${API}?resource=${resource}&id=${id}`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
   });
   return res.json();
 }
@@ -137,14 +256,21 @@ async function loadDashboard() {
     renderRecentCustomers();
     renderRecentSessions();
     renderYearChart(statsData.by_year || {});
+    updateCustomerBadge(state.customers.length);
   } catch(e) {
     toast('Failed to load dashboard data', 'error');
   }
 }
 
+function updateCustomerBadge(count) {
+  const badge = document.getElementById('badge-customers');
+  if (badge) badge.textContent = count;
+}
+
 function renderDashStats(s) {
   const el = document.getElementById('dash-stats');
   if (!el) return;
+  const sym = state.settings?.general?.currency_symbol || '₹';
   el.innerHTML = `
     <div class="stat-card cyan">
       <div class="stat-icon">👥</div>
@@ -161,13 +287,13 @@ function renderDashStats(s) {
     <div class="stat-card green">
       <div class="stat-icon">💰</div>
       <div class="stat-label">Today's Revenue</div>
-      <div class="stat-value">₹${(s.today_revenue ?? 0).toFixed(0)}</div>
-      <div class="stat-sub">Year: ₹${(s.year_revenue ?? 0).toFixed(0)}</div>
+      <div class="stat-value">${sym}${(s.today_revenue ?? 0).toFixed(0)}</div>
+      <div class="stat-sub">Year: ${sym}${(s.year_revenue ?? 0).toFixed(0)}</div>
     </div>
     <div class="stat-card orange">
       <div class="stat-icon">📈</div>
       <div class="stat-label">Total Revenue</div>
-      <div class="stat-value">₹${(s.total_revenue ?? 0).toFixed(0)}</div>
+      <div class="stat-value">${sym}${(s.total_revenue ?? 0).toFixed(0)}</div>
       <div class="stat-sub">All time earnings</div>
     </div>`;
 }
@@ -194,6 +320,7 @@ function renderRecentSessions() {
   const el = document.getElementById('dash-recent-sessions');
   if (!el) return;
   const recent = [...state.sessions].slice(0, 5);
+  const sym = state.settings?.general?.currency_symbol || '₹';
   if (!recent.length) { el.innerHTML = emptyState('No sessions recorded'); return; }
   el.innerHTML = `<div class="table-wrap"><table>
     <thead><tr><th>Customer</th><th>Date</th><th>Service</th><th>Time</th><th>Amount</th></tr></thead>
@@ -202,7 +329,7 @@ function renderRecentSessions() {
       <td class="td-mono">${fmtDate(s.date)}</td>
       <td><span class="badge badge-cyan">${s.service||'—'}</span></td>
       <td class="td-mono">${s.start_time||''}${s.end_time?' → '+s.end_time:''}</td>
-      <td class="td-mono text-right">₹${s.amount||0}</td>
+      <td class="td-mono text-right">${sym}${s.amount||0}</td>
     </tr>`).join('')}</tbody>
   </table></div>`;
 }
@@ -248,6 +375,7 @@ async function loadCustomers() {
     state.customers = res.data || [];
     renderCustomers();
     document.getElementById('cust-count').textContent = `(${state.customers.length})`;
+    updateCustomerBadge(state.customers.length);
   } catch(e) {
     toast('Failed to load customers', 'error');
   }
@@ -266,8 +394,8 @@ function renderCustomers() {
   );
   if (state.filters.year)   list = list.filter(c => c.created_year === state.filters.year);
   if (state.filters.status) list = list.filter(c => c.status === state.filters.status);
+  if (state.filters.directory_id) list = list.filter(c => (c.storage_dir_id || 'dir_root') === state.filters.directory_id);
 
-  // Sort A-Z
   list.sort((a,b) => a.name.localeCompare(b.name));
 
   if (!list.length) { el.innerHTML = emptyState('No customers found'); return; }
@@ -278,6 +406,7 @@ function renderCustomers() {
       <th>Name</th>
       <th>Phone</th>
       <th>Aadhar</th>
+      <th>Location</th>
       <th>Year</th>
       <th>Documents</th>
       <th>Status</th>
@@ -298,6 +427,7 @@ function renderCustomers() {
       </td>
       <td class="td-mono">${c.phone||'—'}</td>
       <td class="td-mono">${c.aadhar||'—'}</td>
+      <td><span class="badge badge-cyan" title="${c.storage_path||''}">${c.storage_dir_name || 'Default'}</span></td>
       <td><span class="badge badge-purple">${c.created_year||'—'}</span></td>
       <td><span class="badge badge-orange">${(c.documents||[]).length} files</span></td>
       <td><span class="badge badge-${c.status==='active'?'active':'inactive'}">${c.status}</span></td>
@@ -312,7 +442,6 @@ function renderCustomers() {
   </table></div>`;
 }
 
-// ── Customer Filters ─────────────────────────────────────────
 function initFilters() {
   document.getElementById('filterYear')?.addEventListener('change', e => {
     state.filters.year = e.target.value;
@@ -320,6 +449,10 @@ function initFilters() {
   });
   document.getElementById('filterStatus')?.addEventListener('change', e => {
     state.filters.status = e.target.value;
+    if (state.page === 'customers') loadCustomers();
+  });
+  document.getElementById('filterCustomerDir')?.addEventListener('change', e => {
+    state.filters.directory_id = e.target.value;
     if (state.page === 'customers') loadCustomers();
   });
   document.getElementById('custSearch')?.addEventListener('input', e => {
@@ -340,14 +473,12 @@ function initFilters() {
   });
 }
 
-// ── View Customer Detail ─────────────────────────────────────
 async function viewCustomer(id) {
   const c = state.customers.find(x => x.id === id);
   if (!c) return;
   state.selectedCustomer = c;
   navigateTo('customers');
 
-  // Show detail panel
   document.getElementById('customers-list-view').classList.add('hidden');
   document.getElementById('customers-detail-view').classList.remove('hidden');
 
@@ -360,10 +491,11 @@ async function viewCustomer(id) {
     </div>`;
   }).join('');
 
+  const sym = state.settings?.general?.currency_symbol || '₹';
   const visits = (c.visits||[]).map(v => `<tr>
     <td class="td-mono">${fmtDate(v.date)}</td>
     <td><span class="badge badge-cyan">${v.service||'—'}</span></td>
-    <td class="td-mono">₹${v.amount||0}</td>
+    <td class="td-mono">${sym}${v.amount||0}</td>
     <td class="text-muted">${v.duration||'—'}</td>
   </tr>`).join('');
 
@@ -372,7 +504,8 @@ async function viewCustomer(id) {
       <div class="detail-avatar">${c.name.charAt(0)}</div>
       <div class="detail-info">
         <h2>${c.name}</h2>
-        <p>ID: ${c.id} &nbsp;|&nbsp; Folder: ${c.folder_name}</p>
+        <p>ID: ${c.id} &nbsp;|&nbsp; Folder: <code>${c.folder_name}</code></p>
+        <p class="text-muted text-sm mt-4">Storage: <span class="badge badge-cyan">${c.storage_dir_name || 'Default'}</span> <code class="text-muted">${c.storage_path || ''}</code></p>
         <div class="flex gap-2 mt-4">
           <span class="badge badge-${c.status==='active'?'active':'inactive'}">${c.status}</span>
           <span class="badge badge-purple">${c.created_year||'—'}</span>
@@ -415,7 +548,6 @@ function backToCustomers() {
   state.selectedCustomer = null;
 }
 
-// ── CUSTOMER FORM ────────────────────────────────────────────
 function initCustomerForm() {
   const form = document.getElementById('customerForm');
   form?.addEventListener('submit', async (e) => {
@@ -444,18 +576,22 @@ function openCustomerModal(editId = null) {
   const title = document.getElementById('customerModalTitle');
   form.reset();
   delete form.dataset.editId;
+  populateStorageDirectoryDropdowns();
 
   if (editId) {
     const c = state.customers.find(x => x.id === editId);
     if (!c) return;
     form.dataset.editId = editId;
     title.textContent   = '✏️ Edit Customer';
-    form.name.value    = c.name;
-    form.phone.value   = c.phone   || '';
-    form.address.value = c.address || '';
-    form.aadhar.value  = c.aadhar  || '';
-    form.status.value  = c.status  || 'active';
-    form.notes.value   = c.notes   || '';
+    form.name.value     = c.name;
+    form.phone.value    = c.phone   || '';
+    form.address.value  = c.address || '';
+    form.aadhar.value   = c.aadhar  || '';
+    form.status.value   = c.status  || 'active';
+    form.notes.value    = c.notes   || '';
+    if (form.storage_dir_id && c.storage_dir_id) {
+      form.storage_dir_id.value = c.storage_dir_id;
+    }
   } else {
     title.textContent = '➕ Add New Customer';
   }
@@ -503,6 +639,7 @@ function renderSessions() {
 
   if (!list.length) { el.innerHTML = emptyState('No sessions found'); return; }
 
+  const sym = state.settings?.general?.currency_symbol || '₹';
   el.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
       <th>ID</th><th>Customer</th><th>Date</th><th>Service</th>
@@ -515,7 +652,7 @@ function renderSessions() {
       <td><span class="badge badge-cyan">${s.service||'—'}</span></td>
       <td class="td-mono">${s.start_time||''}${s.end_time?' → '+s.end_time:''}</td>
       <td class="text-muted">${s.duration_min||0} min</td>
-      <td class="td-mono"><strong>₹${s.amount||0}</strong></td>
+      <td class="td-mono"><strong>${sym}${s.amount||0}</strong></td>
       <td><span class="badge badge-${s.payment_mode==='cash'?'active':'purple'}">${s.payment_mode||'cash'}</span></td>
       <td>
         <button class="btn btn-xs btn-danger" onclick="deleteSession('${s.id}')">🗑</button>
@@ -525,7 +662,6 @@ function renderSessions() {
 }
 
 function initSessionForm() {
-  // Populate customer select when modal opens
   const form = document.getElementById('sessionForm');
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -549,7 +685,6 @@ function openSessionModal(custId = '', custName = '') {
   form.date.value       = new Date().toISOString().split('T')[0];
   form.start_time.value = new Date().toTimeString().slice(0,5);
 
-  // Populate customer dropdown
   const sel = form.querySelector('[name="customer_id"]');
   sel.innerHTML = state.customers.map(c =>
     `<option value="${c.id}" ${c.id===custId?'selected':''}>${c.name}</option>`
@@ -558,7 +693,6 @@ function openSessionModal(custId = '', custName = '') {
   const nameSel = form.querySelector('[name="customer_name"]');
   if (custName) nameSel.value = custName;
 
-  // Sync name on customer change
   sel.onchange = () => {
     const c = state.customers.find(x => x.id === sel.value);
     if (c) nameSel.value = c.name;
@@ -579,7 +713,7 @@ async function deleteSession(id) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// DOCUMENTS
+// DOCUMENTS (MULTI-DIRECTORY SCAN)
 // ══════════════════════════════════════════════════════════════
 async function loadDocuments() {
   showLoading('documents-grid');
@@ -589,40 +723,64 @@ async function loadDocuments() {
       apiGet('folders')
     ]);
 
-    const customers = custRes.data || [];
-    const folders   = foldRes.data || [];
+    state.customers = custRes.data || [];
+    state.folders   = foldRes.data || [];
 
-    const el = document.getElementById('documents-grid');
-    if (!el) return;
-
-    if (!folders.length) { el.innerHTML = emptyState('No customer folders found'); return; }
-
-    el.innerHTML = folders.map(f => {
-      const cust    = customers.find(c => c.folder_name === f.folder) || null;
-      const docs    = f.files || [];
-      const docHtml = docs.map(d => {
-        const ext  = d.split('.').pop().toLowerCase();
-        const icon = { pdf:'📄', jpg:'🖼️', jpeg:'🖼️', png:'🖼️', doc:'📝', docx:'📝', xlsx:'📊' }[ext] || '📎';
-        return `<div class="doc-item" title="${d}"><div class="doc-icon">${icon}</div><div class="doc-name">${d}</div></div>`;
-      }).join('');
-
-      return `<div class="card mb-4">
-        <div class="card-header">
-          <div class="flex items-center gap-3">
-            <div style="width:38px;height:38px;background:linear-gradient(135deg,#00d4ff,#a855f7);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;">📁</div>
-            <div>
-              <h3 style="font-size:14px;">${f.folder}</h3>
-              <p class="text-muted text-sm">${f.count} file${f.count!==1?'s':''}</p>
-            </div>
-          </div>
-          ${cust ? `<span class="badge badge-active">Registered</span>` : `<span class="badge badge-inactive">Not in DB</span>`}
-        </div>
-        ${docs.length ? `<div class="card-body"><div class="docs-grid">${docHtml}</div></div>` : ''}
-      </div>`;
-    }).join('');
+    renderDocuments();
   } catch(e) {
     toast('Failed to load documents', 'error');
   }
+}
+
+function renderDocuments() {
+  const el = document.getElementById('documents-grid');
+  if (!el) return;
+
+  let folders = [...state.folders];
+  if (state.docFilters.location) {
+    folders = folders.filter(f => f.storage_id === state.docFilters.location);
+  }
+
+  if (!folders.length) {
+    el.innerHTML = emptyState('No customer folders found in scanned directories');
+    return;
+  }
+
+  el.innerHTML = folders.map(f => {
+    const cust    = state.customers.find(c => c.folder_name === f.folder) || null;
+    const docs    = f.files || [];
+    const docHtml = docs.map(d => {
+      const ext  = d.split('.').pop().toLowerCase();
+      const icon = { pdf:'📄', jpg:'🖼️', jpeg:'🖼️', png:'🖼️', doc:'📝', docx:'📝', xlsx:'📊' }[ext] || '📎';
+      return `<div class="doc-item" title="${d}">
+        <div class="doc-icon">${icon}</div>
+        <div class="doc-name">${d}</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="card mb-4">
+      <div class="card-header">
+        <div class="flex items-center gap-3">
+          <div style="width:38px;height:38px;background:linear-gradient(135deg,#00d4ff,#a855f7);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;">📁</div>
+          <div>
+            <h3 style="font-size:14px;">${f.folder}</h3>
+            <p class="text-muted text-sm">${f.count} file${f.count!==1?'s':''} &bull; Location: <span class="badge badge-cyan">${f.storage_name || 'Storage'}</span></p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          ${cust ? `<span class="badge badge-active">Registered</span>` : `<span class="badge badge-inactive">Not in DB</span>`}
+          <span class="text-muted text-sm font-mono" style="font-size:10px;" title="${f.full_path}">${f.full_path}</span>
+        </div>
+      </div>
+      ${docs.length ? `<div class="card-body"><div class="docs-grid">${docHtml}</div></div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function filterDocumentsByLocation() {
+  const sel = document.getElementById('filterDocLocation');
+  state.docFilters.location = sel?.value || '';
+  renderDocuments();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -637,7 +795,6 @@ async function loadReports() {
     const s = statsRes;
     const sessions = sesRes.data || [];
 
-    // Monthly chart
     const monthly = s.monthly_revenue || {};
     const reportsEl = document.getElementById('monthly-chart-container');
     if (reportsEl && window.Chart) {
@@ -648,7 +805,7 @@ async function loadReports() {
         data: {
           labels: Object.keys(monthly),
           datasets: [{
-            label: 'Revenue (₹)',
+            label: 'Revenue',
             data: Object.values(monthly),
             backgroundColor: 'rgba(168,85,247,0.3)',
             borderColor: '#a855f7',
@@ -667,7 +824,6 @@ async function loadReports() {
       });
     }
 
-    // Service breakdown
     const svcCount = {};
     sessions.forEach(s => { svcCount[s.service||'Other'] = (svcCount[s.service||'Other']||0) + 1; });
     const svcEl = document.getElementById('service-breakdown');
@@ -689,12 +845,285 @@ async function loadReports() {
 }
 
 // ══════════════════════════════════════════════════════════════
+// SYSTEM MANAGER & SETTINGS
+// ══════════════════════════════════════════════════════════════
+async function loadSettings() {
+  await loadSettingsData();
+  populateGeneralSettingsForm();
+  populateSmtpSettingsForm();
+  renderStorageDirectories();
+  loadSystemInfo();
+}
+
+function switchSettingsTab(tabName) {
+  document.querySelectorAll('.settings-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tabName);
+  });
+  document.querySelectorAll('.settings-section').forEach(s => {
+    s.classList.toggle('active', s.id === `tab-${tabName}`);
+  });
+  if (tabName === 'system') loadSystemInfo();
+}
+
+function populateGeneralSettingsForm() {
+  const g = state.settings?.general;
+  if (!g) return;
+  const form = document.getElementById('generalSettingsForm');
+  if (!form) return;
+
+  form.site_title.value       = g.site_title || '';
+  form.tagline.value          = g.tagline || '';
+  form.owner_name.value       = g.owner_name || '';
+  form.currency_symbol.value  = g.currency_symbol || '₹';
+  form.phone.value            = g.phone || '';
+  form.email.value            = g.email || '';
+  form.address.value          = g.address || '';
+  form.logo_type.value        = g.logo_type || 'icon';
+  form.logo_icon.value        = g.logo_icon || '🖥️';
+  form.logo_url.value         = g.logo_url || '';
+
+  const isImg = g.logo_type === 'image';
+  document.getElementById('logoIconGroup')?.classList.toggle('hidden', isImg);
+  document.getElementById('logoUrlGroup')?.classList.toggle('hidden', !isImg);
+}
+
+function populateSmtpSettingsForm() {
+  const s = state.settings?.smtp;
+  if (!s) return;
+  const form = document.getElementById('smtpSettingsForm');
+  if (!form) return;
+
+  form.host.value       = s.host || '';
+  form.port.value       = s.port || 587;
+  form.encryption.value = s.encryption || 'tls';
+  form.enabled.value    = s.enabled ? 'true' : 'false';
+  form.username.value   = s.username || '';
+  form.password.value   = s.password || '';
+  form.from_email.value = s.from_email || '';
+  form.from_name.value  = s.from_name || '';
+}
+
+function renderStorageDirectories() {
+  const container = document.getElementById('storage-directories-list');
+  if (!container) return;
+
+  const dirs = state.settings?.storage?.directories || [];
+  if (!dirs.length) {
+    container.innerHTML = emptyState('No storage directories configured');
+    return;
+  }
+
+  container.innerHTML = dirs.map(d => {
+    const isDef = d.is_default;
+    const isActive = d.is_active !== false;
+
+    return `
+      <div class="directory-card ${isDef ? 'is-default' : ''}">
+        <div class="dir-info">
+          <h4>
+            <span>${d.name}</span>
+            ${isDef ? '<span class="badge badge-cyan">★ Default Location</span>' : ''}
+            <span class="badge badge-${isActive ? 'active' : 'inactive'}">${isActive ? 'Active' : 'Inactive'}</span>
+          </h4>
+          <p>${d.path}</p>
+        </div>
+        <div class="flex items-center gap-2">
+          ${!isDef ? `
+            <button class="btn btn-xs btn-secondary" onclick="setDefaultDirectory('${d.id}')">Set Default</button>
+            <button class="btn btn-xs btn-secondary" onclick="toggleDirectoryStatus('${d.id}')">${isActive ? 'Deactivate' : 'Activate'}</button>
+            <button class="btn btn-xs btn-danger" onclick="removeDirectory('${d.id}')">🗑</button>
+          ` : `
+            <span class="text-muted text-sm font-mono">Primary Storage</span>
+          `}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function initSettingsForms() {
+  // General Branding Form
+  const genForm = document.getElementById('generalSettingsForm');
+  genForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(genForm));
+    const res = await apiPost('settings', { general: data });
+    if (res.success) {
+      toast('Branding settings saved!', 'success');
+      state.settings = res.data;
+      applySettings(res.data);
+    } else {
+      toast(res.message || 'Save failed', 'error');
+    }
+  });
+
+  // SMTP Settings Form
+  const smtpForm = document.getElementById('smtpSettingsForm');
+  smtpForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const raw = Object.fromEntries(new FormData(smtpForm));
+    const data = {
+      ...raw,
+      port: parseInt(raw.port) || 587,
+      enabled: raw.enabled === 'true'
+    };
+    const res = await apiPost('settings', { smtp: data });
+    if (res.success) {
+      toast('SMTP settings saved!', 'success');
+      state.settings = res.data;
+    } else {
+      toast(res.message || 'Save failed', 'error');
+    }
+  });
+}
+
+async function testSmtpConnection() {
+  const form = document.getElementById('smtpSettingsForm');
+  if (!form) return;
+  const raw = Object.fromEntries(new FormData(form));
+  toast('Testing SMTP connection...', 'info');
+
+  try {
+    const res = await apiPost('settings', {
+      host: raw.host,
+      port: parseInt(raw.port) || 587,
+      encryption: raw.encryption
+    }, 'test_smtp');
+
+    if (res.success) {
+      toast(res.message, 'success');
+    } else {
+      toast(res.message, 'error');
+    }
+  } catch(e) {
+    toast('SMTP test failed to execute', 'error');
+  }
+}
+
+// ── DYNAMIC DIRECTORIES ACTIONS ──────────────────────────────
+function initDirectoryForm() {
+  const form = document.getElementById('directoryForm');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form));
+    const res = await apiPost('settings', {
+      name: data.name,
+      path: data.path,
+      is_default: !!data.is_default
+    }, 'add_directory');
+
+    if (res.success) {
+      toast('Storage location added!', 'success');
+      closeModal('directoryModal');
+      form.reset();
+      document.getElementById('dirTestResult').textContent = '';
+      await loadSettings();
+    } else {
+      toast(res.message || 'Failed to add directory', 'error');
+    }
+  });
+}
+
+function openDirectoryModal() {
+  const form = document.getElementById('directoryForm');
+  form?.reset();
+  document.getElementById('dirTestResult').textContent = '';
+  openModal('directoryModal');
+}
+
+async function testDirectoryPath() {
+  const pathInp = document.getElementById('dirPathInput');
+  const resultEl = document.getElementById('dirTestResult');
+  const path = pathInp?.value.trim();
+
+  if (!path) {
+    if (resultEl) resultEl.innerHTML = '<span style="color:var(--accent-red)">Enter a path</span>';
+    return;
+  }
+
+  if (resultEl) resultEl.innerHTML = '<span class="text-muted">Testing...</span>';
+  const res = await apiPost('settings', { path }, 'test_directory');
+
+  if (res.success) {
+    if (resultEl) resultEl.innerHTML = `<span style="color:var(--accent-green)">✔ ${res.message}</span>`;
+  } else {
+    if (resultEl) resultEl.innerHTML = `<span style="color:var(--accent-red)">✖ ${res.message}</span>`;
+  }
+}
+
+async function setDefaultDirectory(id) {
+  const res = await apiPost('settings', { id }, 'set_default_directory');
+  if (res.success) {
+    toast('Default storage directory updated', 'success');
+    await loadSettings();
+  } else {
+    toast(res.message, 'error');
+  }
+}
+
+async function toggleDirectoryStatus(id) {
+  const res = await apiPost('settings', { id }, 'toggle_directory_status');
+  if (res.success) {
+    toast('Directory status updated', 'success');
+    await loadSettings();
+  } else {
+    toast(res.message, 'error');
+  }
+}
+
+async function removeDirectory(id) {
+  if (!confirm('Remove this storage location? Existing files will not be deleted.')) return;
+  const res = await apiPost('settings', { id }, 'remove_directory');
+  if (res.success) {
+    toast('Storage location removed', 'success');
+    await loadSettings();
+  } else {
+    toast(res.message, 'error');
+  }
+}
+
+// ── SYSTEM INFO ──────────────────────────────────────────────
+async function loadSystemInfo() {
+  const container = document.getElementById('system-info-content');
+  if (!container) return;
+
+  try {
+    const res = await apiGet('system_info');
+    if (res.success) {
+      const d = res;
+      const diskHtml = (d.storage_disks || []).map(dk => `
+        <div style="background:var(--bg-input);padding:12px;border-radius:8px;margin-bottom:8px;border:1px solid var(--border);">
+          <div class="flex items-center justify-between">
+            <strong>${dk.name}</strong>
+            <span class="badge ${dk.exists ? 'badge-active' : 'badge-inactive'}">${dk.exists ? 'Online' : 'Not Found'}</span>
+          </div>
+          <div class="font-mono text-sm text-muted mt-4">${dk.path}</div>
+          ${dk.exists ? `<div class="text-sm mt-4">Free: <strong>${dk.free_gb} GB</strong> / Total: ${dk.total_gb} GB</div>` : ''}
+        </div>
+      `).join('');
+
+      container.innerHTML = `
+        <div class="detail-grid mb-4">
+          <div class="detail-field"><label>PHP Version</label><p class="font-mono">${d.php_version}</p></div>
+          <div class="detail-field"><label>Operating System</label><p>${d.server_os}</p></div>
+          <div class="detail-field"><label>Server Software</label><p class="font-mono">${d.server_soft}</p></div>
+          <div class="detail-field"><label>Memory Limit</label><p class="font-mono">${d.memory_limit}</p></div>
+        </div>
+        <h4 style="font-size:13px;font-weight:700;margin-bottom:10px;">💾 Storage Drive Health & Free Space</h4>
+        ${diskHtml}
+      `;
+    }
+  } catch(e) {
+    container.innerHTML = '<p class="text-muted">Failed to load system diagnostics</p>';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // MODAL HELPERS
 // ══════════════════════════════════════════════════════════════
 function openModal(id)  { document.getElementById(id)?.classList.add('open'); }
 function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
 
-// Click outside to close
 document.addEventListener('click', (e) => {
   if (e.target.classList.contains('modal-overlay')) {
     e.target.classList.remove('open');
@@ -735,12 +1164,4 @@ function fmtDate(d) {
   try {
     return new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
   } catch { return d; }
-}
-
-// Year list helper
-function getYears() {
-  const current = new Date().getFullYear();
-  const years = [];
-  for (let y = 2020; y <= current; y++) years.push(y);
-  return years;
 }
