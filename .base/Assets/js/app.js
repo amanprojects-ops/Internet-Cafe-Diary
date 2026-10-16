@@ -21,6 +21,7 @@ let state = {
   allDocuments: [],
   docDataTable: null,
   docViewMode: 'table',
+  folderNav: { customerFolder: null, subpath: '', storageId: '' },
   stats: {},
   settings: null,
   selectedCustomer: null,
@@ -81,6 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initSettingsForms();
   initDirectoryForm();
   initDocumentForms();
+  initSubfolderForms();
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -495,21 +497,20 @@ async function viewCustomer(id) {
 
   const targetDirId = c.storage_dir_id || 'dir_root';
   const targetDir = (state.settings?.storage?.directories || []).find(d => d.id === targetDirId);
-  const basePath = targetDir ? targetDir.path : '';
-  const customerFolderFullPath = basePath ? (basePath.replace(/[\\\/]$/, '') + '\\' + c.folder_name) : '';
-
-  const docs = (c.documents||[]).map(d => {
-    const ext = d.split('.').pop().toLowerCase();
+  const custDocs = state.allDocuments.filter(d => d.customer_id === c.id || d.folder === c.folder_name);
+  const docs = custDocs.map(d => {
+    const ext = d.ext || (d.name ? d.name.split('.').pop().toLowerCase() : '');
     const icon = getFileIconHtml(ext);
-    const fullPath = customerFolderFullPath ? (customerFolderFullPath + '\\' + d) : '';
+    const fullPath = d.full_path;
 
-    return `<div class="doc-item" title="${escapeHtml(d)}">
-      <div class="doc-icon" onclick="previewDocument('${escapeJsString(fullPath)}','${escapeJsString(d)}','${ext}')" style="cursor:pointer;">${icon}</div>
-      <div class="doc-name" onclick="previewDocument('${escapeJsString(fullPath)}','${escapeJsString(d)}','${ext}')" style="cursor:pointer;">${escapeHtml(d)}</div>
+    return `<div class="doc-item" title="${escapeHtml(d.name)}">
+      <div class="doc-icon" onclick="previewDocument('${escapeJsString(fullPath)}','${escapeJsString(d.name)}','${ext}')" style="cursor:pointer;">${icon}</div>
+      <div class="doc-name" onclick="previewDocument('${escapeJsString(fullPath)}','${escapeJsString(d.name)}','${ext}')" style="cursor:pointer;">${escapeHtml(d.name)}</div>
+      ${d.subfolder ? `<div class="subfolder-chip mt-2" style="font-size:10px;"><i class="fa-solid fa-folder-tree"></i> ${escapeHtml(d.subfolder)}</div>` : ''}
       <div class="flex items-center justify-center gap-2 mt-4">
-        <button class="btn btn-xs btn-secondary" onclick="openRenameDocModal('${escapeJsString(fullPath)}','${escapeJsString(d)}')" title="Rename"><i class="fa-solid fa-pen-to-square"></i></button>
+        <button class="btn btn-xs btn-secondary" onclick="openRenameDocModal('${escapeJsString(fullPath)}','${escapeJsString(d.name)}')" title="Rename"><i class="fa-solid fa-pen-to-square"></i></button>
         <button class="btn btn-xs btn-secondary" onclick="downloadDocument('${escapeJsString(fullPath)}')" title="Download"><i class="fa-solid fa-download"></i></button>
-        <button class="btn btn-xs btn-danger" onclick="deleteDocument('${escapeJsString(fullPath)}','${escapeJsString(d)}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+        <button class="btn btn-xs btn-danger" onclick="deleteDocument('${escapeJsString(fullPath)}','${escapeJsString(d.name)}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
       </div>
     </div>`;
   }).join('');
@@ -797,6 +798,12 @@ function renderDocumentsDataTable() {
     const icon = getFileIconHtml(d.ext);
     const escapedPath = escapeJsString(d.full_path);
     const escapedName = escapeJsString(d.name);
+    const escapedFolder = escapeJsString(d.folder);
+    const escapedSub = escapeJsString(d.subfolder || '');
+
+    const subfolderHtml = d.subfolder
+      ? `<span class="subfolder-chip" onclick="navigateToSubfolder('${escapedFolder}','${escapedSub}')" title="Click to open this subfolder in explorer"><i class="fa-solid fa-folder-tree"></i> ${escapeHtml(d.subfolder)}</span>`
+      : `<span class="text-muted text-sm"><i class="fa-solid fa-folder"></i> Root</span>`;
 
     return `<tr>
       <td style="text-align:center;width:40px;">${icon}</td>
@@ -806,9 +813,10 @@ function renderDocumentsDataTable() {
         </span>
       </td>
       <td>
-        <div class="td-name">${escapeHtml(d.customer_name)}</div>
+        <div class="td-name" style="cursor:pointer;" onclick="navigateToSubfolder('${escapedFolder}','')">${escapeHtml(d.customer_name)}</div>
         <div class="text-muted text-sm font-mono">${escapeHtml(d.folder)}</div>
       </td>
+      <td>${subfolderHtml}</td>
       <td><span class="badge badge-cyan"><i class="fa-solid fa-hard-drive"></i> ${escapeHtml(d.storage_name)}</span></td>
       <td class="font-mono td-mono">${d.size_formatted}</td>
       <td class="font-mono text-muted text-sm">${d.modified_date}</td>
@@ -828,18 +836,46 @@ function renderDocumentsDataTable() {
     state.docDataTable = $('#documentsDataTable').DataTable({
       pageLength: 25,
       lengthMenu: [10, 25, 50, 100],
-      order: [[5, 'desc']], // sort by modified date desc
+      order: [[6, 'desc']], // sort by modified date desc
       language: {
         search: "_INPUT_",
-        searchPlaceholder: "Search any document, customer, location...",
+        searchPlaceholder: "Search any document, sub-folder, customer, location...",
         lengthMenu: "Show _MENU_ entries"
       }
     });
   }
 }
 
+// ── INTERACTIVE FOLDER & SUB-FOLDER NAVIGATION ────────────────
+function openFolderNav(customerFolder = null, subpath = '') {
+  state.folderNav.customerFolder = customerFolder || null;
+  state.folderNav.subpath = subpath ? subpath.replace(/\\/g, '/').replace(/^\/|\/$/g, '') : '';
+  renderDocumentsFolderGrid();
+}
+
+function folderNavigateUp() {
+  if (state.folderNav.subpath) {
+    const parts = state.folderNav.subpath.split('/');
+    parts.pop();
+    state.folderNav.subpath = parts.join('/');
+  } else {
+    state.folderNav.customerFolder = null;
+    state.folderNav.subpath = '';
+  }
+  renderDocumentsFolderGrid();
+}
+
+function navigateToSubfolder(customerFolder, subpath = '') {
+  switchDocViewMode('grid');
+  openFolderNav(customerFolder, subpath);
+}
+
 function renderDocumentsFolderGrid() {
   const el = document.getElementById('documents-grid');
+  const breadcrumbsEl = document.getElementById('folderBreadcrumbs');
+  const upBtn = document.getElementById('folderUpBtn');
+  const newFolderBtn = document.getElementById('newFolderInViewBtn');
+  const uploadBtn = document.getElementById('uploadInViewBtn');
   if (!el) return;
 
   let folders = [...state.folders];
@@ -847,51 +883,256 @@ function renderDocumentsFolderGrid() {
     folders = folders.filter(f => f.storage_id === state.docFilters.location);
   }
 
-  if (!folders.length) {
-    el.innerHTML = emptyState('No customer folders found in scanned directories');
-    return;
-  }
+  // 1. ROOT LEVEL: Show All Customer Folders
+  if (!state.folderNav.customerFolder) {
+    if (upBtn) upBtn.style.display = 'none';
+    if (newFolderBtn) {
+      newFolderBtn.onclick = () => openNewSubfolderModal();
+      newFolderBtn.innerHTML = '<i class="fa-solid fa-folder-plus"></i> New Sub-Folder';
+    }
+    if (uploadBtn) {
+      uploadBtn.onclick = () => openUploadDocModal();
+      uploadBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Upload Document';
+    }
 
-  el.innerHTML = folders.map(f => {
-    const cust = state.customers.find(c => c.folder_name === f.folder) || null;
-    const docs = f.files || [];
-    const docHtml = docs.map(d => {
-      const ext = d.split('.').pop().toLowerCase();
-      const icon = getFileIconHtml(ext);
-      const fullPath = f.full_path ? (f.full_path + '\\' + d) : '';
-      const escapedPath = escapeJsString(fullPath);
-      const escapedName = escapeJsString(d);
+    if (breadcrumbsEl) {
+      breadcrumbsEl.innerHTML = `
+        <span class="crumb-item active"><i class="fa-solid fa-hard-drive"></i> All Customer Folders (${folders.length})</span>
+      `;
+    }
 
-      return `<div class="doc-item" title="${escapeHtml(d)}">
-        <div class="doc-icon" onclick="previewDocument('${escapedPath}','${escapedName}','${ext}')" style="cursor:pointer;">${icon}</div>
-        <div class="doc-name" onclick="previewDocument('${escapedPath}','${escapedName}','${ext}')" style="cursor:pointer;">${escapeHtml(d)}</div>
-        <div class="flex items-center justify-center gap-2 mt-4">
-          <button class="btn btn-xs btn-secondary" onclick="openRenameDocModal('${escapedPath}','${escapedName}')" title="Rename"><i class="fa-solid fa-pen-to-square"></i></button>
-          <button class="btn btn-xs btn-secondary" onclick="downloadDocument('${escapedPath}')" title="Download"><i class="fa-solid fa-download"></i></button>
-          <button class="btn btn-xs btn-danger" onclick="deleteDocument('${escapedPath}','${escapedName}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+    if (!folders.length) {
+      el.innerHTML = emptyState('No customer folders found in scanned directories');
+      return;
+    }
+
+    el.innerHTML = folders.map(f => {
+      const cust = state.customers.find(c => c.folder_name === f.folder) || null;
+      const subfolders = f.subfolders || [];
+      const totalCount = f.total_files_count || f.count || 0;
+      const escapedFolder = escapeJsString(f.folder);
+      const custId = cust ? cust.id : '';
+
+      // Direct files in root of customer folder
+      const directDocs = (f.files || []).slice(0, 12);
+      const directDocHtml = directDocs.map(fileName => {
+        const fullPath = f.full_path ? (f.full_path + '\\' + fileName) : '';
+        const ext = fileName.split('.').pop().toLowerCase();
+        const icon = getFileIconHtml(ext);
+        const escapedPath = escapeJsString(fullPath);
+        const escapedName = escapeJsString(fileName);
+
+        return `<div class="doc-item" title="${escapeHtml(fileName)}">
+          <div class="doc-icon" onclick="previewDocument('${escapedPath}','${escapedName}','${ext}')" style="cursor:pointer;">${icon}</div>
+          <div class="doc-name" onclick="previewDocument('${escapedPath}','${escapedName}','${ext}')" style="cursor:pointer;">${escapeHtml(fileName)}</div>
+          <div class="flex items-center justify-center gap-2 mt-4">
+            <button class="btn btn-xs btn-secondary" onclick="openRenameDocModal('${escapedPath}','${escapedName}')" title="Rename"><i class="fa-solid fa-pen-to-square"></i></button>
+            <button class="btn btn-xs btn-secondary" onclick="downloadDocument('${escapedPath}')" title="Download"><i class="fa-solid fa-download"></i></button>
+            <button class="btn btn-xs btn-danger" onclick="deleteDocument('${escapedPath}','${escapedName}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </div>`;
+      }).join('');
+
+      // Subfolders chips
+      const subChipsHtml = subfolders.length ? `
+        <div class="mb-3">
+          <div class="text-xs text-muted mb-2 font-mono"><i class="fa-solid fa-folder-tree"></i> SUB-FOLDERS (${subfolders.length}):</div>
+          <div class="flex items-center gap-2 flex-wrap">
+            ${subfolders.map(sf => `
+              <span class="subfolder-chip" onclick="openFolderNav('${escapedFolder}','${escapeJsString(sf.relative_path)}')">
+                <i class="fa-solid fa-folder"></i> ${escapeHtml(sf.name)} <span style="opacity:0.7">(${sf.total_count})</span>
+              </span>
+            `).join('')}
+          </div>
+        </div>
+      ` : '';
+
+      return `<div class="card mb-4">
+        <div class="card-header">
+          <div class="flex items-center gap-3">
+            <div style="width:38px;height:38px;background:linear-gradient(135deg,#00d4ff,#a855f7);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;" onclick="openFolderNav('${escapedFolder}','')">
+              <i class="fa-solid fa-folder"></i>
+            </div>
+            <div>
+              <h3 style="font-size:14px;cursor:pointer;" onclick="openFolderNav('${escapedFolder}','')">
+                ${escapeHtml(f.folder)}
+              </h3>
+              <p class="text-muted text-sm">
+                ${totalCount} total item${totalCount!==1?'s':''} &bull; Location: <span class="badge badge-cyan"><i class="fa-solid fa-hard-drive"></i> ${escapeHtml(f.storage_name || 'Storage')}</span>
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            ${cust ? `<span class="badge badge-active"><i class="fa-solid fa-check"></i> Registered</span>` : `<span class="badge badge-inactive">Unlinked</span>`}
+            <button class="btn btn-xs btn-secondary" onclick="openFolderNav('${escapedFolder}','')" title="Browse All Subfolders & Files"><i class="fa-solid fa-folder-open"></i> Browse</button>
+            <button class="btn btn-xs btn-secondary" onclick="openNewSubfolderModal('${custId}','${escapedFolder}','')" title="Create Sub-folder"><i class="fa-solid fa-folder-plus"></i></button>
+            <button class="btn btn-xs btn-primary" onclick="openUploadDocModal('${custId}','${escapedFolder}','')" title="Upload File Here"><i class="fa-solid fa-upload"></i></button>
+          </div>
+        </div>
+        <div class="card-body">
+          ${subChipsHtml}
+          ${directDocHtml ? `<div class="docs-grid">${directDocHtml}</div>` : (subfolders.length ? '' : '<p class="text-muted text-sm">Empty folder</p>')}
+          ${(f.files && f.files.length > 12) ? `<p class="text-sm mt-3"><a href="javascript:void(0)" onclick="openFolderNav('${escapedFolder}','')" style="color:var(--accent-cyan);"><i class="fa-solid fa-arrow-right"></i> View all ${f.files.length} direct files &amp; sub-folders...</a></p>` : ''}
         </div>
       </div>`;
     }).join('');
+    return;
+  }
 
-    return `<div class="card mb-4">
-      <div class="card-header">
-        <div class="flex items-center gap-3">
-          <div style="width:38px;height:38px;background:linear-gradient(135deg,#00d4ff,#a855f7);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;">
-            <i class="fa-solid fa-folder"></i>
-          </div>
-          <div>
-            <h3 style="font-size:14px;">${escapeHtml(f.folder)}</h3>
-            <p class="text-muted text-sm">${f.count} file${f.count!==1?'s':''} &bull; Location: <span class="badge badge-cyan"><i class="fa-solid fa-hard-drive"></i> ${escapeHtml(f.storage_name || 'Storage')}</span></p>
-          </div>
-        </div>
-        <div class="flex items-center gap-2">
-          ${cust ? `<span class="badge badge-active"><i class="fa-solid fa-check"></i> Registered</span>` : `<span class="badge badge-inactive">Unlinked</span>`}
-          <button class="btn btn-xs btn-primary" onclick="openUploadDocModal('${cust ? cust.id : ''}')"><i class="fa-solid fa-upload"></i> Upload</button>
-        </div>
+  // 2. INSIDE A CUSTOMER OR SUB-FOLDER LEVEL
+  const targetFolder = state.folders.find(f => f.folder === state.folderNav.customerFolder);
+  if (!targetFolder) {
+    el.innerHTML = emptyState('Customer folder not found');
+    return;
+  }
+
+  if (upBtn) upBtn.style.display = 'inline-flex';
+  const cust = state.customers.find(c => c.folder_name === targetFolder.folder) || null;
+  const custId = cust ? cust.id : '';
+  const escapedFolder = escapeJsString(targetFolder.folder);
+  const escapedCurrentSub = escapeJsString(state.folderNav.subpath);
+
+  if (newFolderBtn) {
+    newFolderBtn.onclick = () => openNewSubfolderModal(custId, targetFolder.folder, state.folderNav.subpath);
+    newFolderBtn.innerHTML = '<i class="fa-solid fa-folder-plus"></i> New Sub-Folder Here';
+  }
+  if (uploadBtn) {
+    uploadBtn.onclick = () => openUploadDocModal(custId, targetFolder.folder, state.folderNav.subpath);
+    uploadBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Upload Here';
+  }
+
+  // Build breadcrumbs
+  if (breadcrumbsEl) {
+    let crumbsHtml = `
+      <span class="crumb-item" onclick="openFolderNav(null, '')"><i class="fa-solid fa-house"></i> All Folders</span>
+      <span class="crumb-sep">/</span>
+      <span class="crumb-item ${!state.folderNav.subpath ? 'active' : ''}" onclick="openFolderNav('${escapedFolder}', '')"><i class="fa-solid fa-user"></i> ${escapeHtml(targetFolder.folder)}</span>
+    `;
+
+    if (state.folderNav.subpath) {
+      const parts = state.folderNav.subpath.split('/');
+      let accumulated = '';
+      parts.forEach((p, idx) => {
+        accumulated = accumulated ? (accumulated + '/' + p) : p;
+        const isLast = idx === parts.length - 1;
+        const escAcc = escapeJsString(accumulated);
+        crumbsHtml += `
+          <span class="crumb-sep">/</span>
+          <span class="crumb-item ${isLast ? 'active' : ''}" onclick="openFolderNav('${escapedFolder}', '${escAcc}')">
+            <i class="fa-solid fa-folder"></i> ${escapeHtml(p)}
+          </span>
+        `;
+      });
+    }
+    breadcrumbsEl.innerHTML = crumbsHtml;
+  }
+
+  // Find subfolders and files at this level
+  let currentSubfolders = [];
+  if (!state.folderNav.subpath) {
+    currentSubfolders = targetFolder.subfolders || [];
+  } else {
+    // Traverse down targetFolder.subfolders to find matching subpath node
+    const findSubfolderNode = (list, targetPath) => {
+      for (const item of list) {
+        if (item.relative_path === targetPath) return item;
+        if (item.subfolders && item.subfolders.length) {
+          const found = findSubfolderNode(item.subfolders, targetPath);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    const node = findSubfolderNode(targetFolder.subfolders || [], state.folderNav.subpath);
+    currentSubfolders = node ? (node.subfolders || []) : [];
+  }
+
+  // Filter documents directly in this folder level
+  const currentDocs = state.allDocuments.filter(d => {
+    if (d.folder !== targetFolder.folder) return false;
+    const itemSub = (d.subfolder || '').replace(/\\/g, '/').replace(/^\/|\/$/g, '');
+    const activeSub = (state.folderNav.subpath || '').replace(/\\/g, '/').replace(/^\/|\/$/g, '');
+    return itemSub === activeSub;
+  });
+
+  // Render Sub-folders Grid
+  const subfoldersHtml = currentSubfolders.length ? `
+    <div class="mb-4">
+      <h4 style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;">
+        <i class="fa-solid fa-folder-tree"></i> Sub-Folders (${currentSubfolders.length})
+      </h4>
+      <div class="subfolders-grid">
+        ${currentSubfolders.map(sf => {
+          const escSfPath = escapeJsString(sf.full_path);
+          const escSfName = escapeJsString(sf.name);
+          const escSfRel  = escapeJsString(sf.relative_path);
+
+          return `<div class="subfolder-card" onclick="openFolderNav('${escapedFolder}', '${escSfRel}')">
+            <div class="subfolder-card-main">
+              <div class="subfolder-icon"><i class="fa-solid fa-folder"></i></div>
+              <div class="subfolder-info">
+                <div class="subfolder-name" title="${escapeHtml(sf.name)}">${escapeHtml(sf.name)}</div>
+                <div class="subfolder-meta">${sf.total_count} item${sf.total_count!==1?'s':''}</div>
+              </div>
+            </div>
+            <div class="subfolder-actions">
+              <button class="btn btn-xs btn-secondary" onclick="event.stopPropagation(); openRenameSubfolderModal('${escSfPath}','${escSfName}')" title="Rename"><i class="fa-solid fa-pen-to-square"></i></button>
+              <button class="btn btn-xs btn-danger" onclick="event.stopPropagation(); deleteSubfolder('${escSfPath}','${escSfName}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>
-      ${docs.length ? `<div class="card-body"><div class="docs-grid">${docHtml}</div></div>` : ''}
-    </div>`;
-  }).join('');
+    </div>
+  ` : '';
+
+  // Render Files Grid
+  const docsHtml = currentDocs.length ? `
+    <div>
+      <h4 style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;">
+        <i class="fa-solid fa-file"></i> Documents (${currentDocs.length})
+      </h4>
+      <div class="docs-grid">
+        ${currentDocs.map(d => {
+          const icon = getFileIconHtml(d.ext);
+          const escPath = escapeJsString(d.full_path);
+          const escName = escapeJsString(d.name);
+
+          return `<div class="doc-item" title="${escapeHtml(d.name)}">
+            <div class="doc-icon" onclick="previewDocument('${escPath}','${escName}','${d.ext}')" style="cursor:pointer;">${icon}</div>
+            <div class="doc-name" onclick="previewDocument('${escPath}','${escName}','${d.ext}')" style="cursor:pointer;">${escapeHtml(d.name)}</div>
+            <div class="text-xs text-muted mt-1 font-mono">${d.size_formatted}</div>
+            <div class="flex items-center justify-center gap-2 mt-3">
+              <button class="btn btn-xs btn-secondary" onclick="previewDocument('${escPath}','${escName}','${d.ext}')" title="Preview"><i class="fa-solid fa-eye"></i></button>
+              <button class="btn btn-xs btn-secondary" onclick="openRenameDocModal('${escPath}','${escName}')" title="Rename"><i class="fa-solid fa-pen-to-square"></i></button>
+              <button class="btn btn-xs btn-secondary" onclick="downloadDocument('${escPath}')" title="Download"><i class="fa-solid fa-download"></i></button>
+              <button class="btn btn-xs btn-danger" onclick="deleteDocument('${escPath}','${escName}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  const emptyHtml = (!currentSubfolders.length && !currentDocs.length) ? `
+    <div class="empty-state">
+      <div class="icon"><i class="fa-solid fa-folder-open"></i></div>
+      <p>This sub-folder is currently empty.</p>
+      <div class="flex justify-center gap-2 mt-4">
+        <button class="btn btn-primary btn-sm" onclick="openUploadDocModal('${custId}','${escapedFolder}','${escapedCurrentSub}')"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Document Here</button>
+        <button class="btn btn-secondary btn-sm" onclick="openNewSubfolderModal('${custId}','${escapedFolder}','${escapedCurrentSub}')"><i class="fa-solid fa-folder-plus"></i> Create Nested Sub-Folder</button>
+      </div>
+    </div>
+  ` : '';
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-body">
+        ${subfoldersHtml}
+        ${docsHtml}
+        ${emptyHtml}
+      </div>
+    </div>
+  `;
 }
 
 function filterDocumentsByLocation() {
@@ -901,13 +1142,26 @@ function filterDocumentsByLocation() {
   renderDocumentsFolderGrid();
 }
 
-// ── DOCUMENT MODALS & ACTIONS ────────────────────────────────
+// ── DOCUMENT & SUBFOLDER MODALS & CRUD ────────────────────────
 function initDocumentForms() {
   // Upload Document Form
   const uploadForm = document.getElementById('uploadDocForm');
   uploadForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(uploadForm);
+
+    // Compute final subfolder value
+    const subSel = document.getElementById('uploadDocSubfolderSelect');
+    const customSubInp = document.getElementById('uploadDocCustomSubfolderInput');
+    let finalSub = '';
+
+    if (subSel && subSel.value === '__NEW__') {
+      finalSub = customSubInp?.value.trim() || '';
+    } else if (subSel) {
+      finalSub = subSel.value.trim();
+    }
+    formData.set('subfolder', finalSub);
+
     toast('Uploading document...', 'info');
 
     try {
@@ -954,26 +1208,270 @@ function initDocumentForms() {
   });
 }
 
-function openUploadDocModal(prefillCustomerId = '') {
+function initSubfolderForms() {
+  // Create New Subfolder Form
+  const newSubForm = document.getElementById('newSubfolderForm');
+  newSubForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const raw = Object.fromEntries(new FormData(newSubForm));
+
+    if (!raw.subfolder_name) {
+      toast('Enter a subfolder name', 'warning');
+      return;
+    }
+
+    toast('Creating subfolder...', 'info');
+    const res = await apiPost('documents', raw, 'create_subfolder');
+
+    if (res.success) {
+      toast(res.message, 'success');
+      closeModal('newSubfolderModal');
+      newSubForm.reset();
+      await loadDocuments();
+      // Navigate to the created subfolder
+      if (raw.customer_folder) {
+        openFolderNav(raw.customer_folder, res.subfolder || raw.subfolder_name);
+      }
+    } else {
+      toast(res.message || 'Failed to create subfolder', 'error');
+    }
+  });
+
+  // Rename Subfolder Form
+  const renameSubForm = document.getElementById('renameSubfolderForm');
+  renameSubForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const raw = Object.fromEntries(new FormData(renameSubForm));
+    toast('Renaming subfolder...', 'info');
+
+    const res = await apiPost('documents', raw, 'rename_subfolder');
+    if (res.success) {
+      toast(res.message, 'success');
+      closeModal('renameSubfolderModal');
+      await loadDocuments();
+    } else {
+      toast(res.message || 'Rename failed', 'error');
+    }
+  });
+}
+
+async function openUploadDocModal(prefillCustomerId = '', prefillCustFolder = '', prefillSubfolder = '') {
   const form = document.getElementById('uploadDocForm');
   form?.reset();
 
   const custSelect = document.getElementById('uploadDocCustomerSelect');
   if (custSelect) {
-    custSelect.innerHTML = '<option value="">— Select Customer —</option>' +
-      state.customers.map(c =>
-        `<option value="${c.id}" ${c.id === prefillCustomerId ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.folder_name)})</option>`
-      ).join('') +
-      '<option value="__custom__">+ Enter Custom Folder Name</option>';
+    let optionsHtml = '<option value="">— Select Customer —</option>';
 
-    custSelect.onchange = () => {
-      const isCustom = custSelect.value === '__custom__';
-      document.getElementById('uploadCustomFolderGroup').style.display = isCustom ? 'block' : 'none';
-    };
+    // Add registered customers
+    state.customers.forEach(c => {
+      const isSel = (prefillCustomerId && c.id === prefillCustomerId) || (prefillCustFolder && c.folder_name === prefillCustFolder);
+      optionsHtml += `<option value="${c.id}" ${isSel ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.folder_name)})</option>`;
+    });
+
+    // Add any scanned folders not in registered customers
+    state.folders.forEach(f => {
+      const exists = state.customers.some(c => c.folder_name === f.folder);
+      if (!exists) {
+        const isSel = prefillCustFolder && f.folder === prefillCustFolder;
+        optionsHtml += `<option value="folder:${escapeHtml(f.folder)}" ${isSel ? 'selected' : ''}>📁 ${escapeHtml(f.folder)} (Folder)</option>`;
+      }
+    });
+
+    optionsHtml += '<option value="__custom__">+ Enter Custom Folder Name</option>';
+    custSelect.innerHTML = optionsHtml;
   }
 
   document.getElementById('uploadCustomFolderGroup').style.display = 'none';
+  document.getElementById('uploadDocCustomSubfolderInput').style.display = 'none';
+
+  // Load subfolders for prefilled selection
+  await onUploadCustomerChanged(prefillSubfolder);
+
   openModal('uploadDocModal');
+}
+
+async function onUploadCustomerChanged(targetSubfolder = '') {
+  const custSelect = document.getElementById('uploadDocCustomerSelect');
+  const customGroup = document.getElementById('uploadCustomFolderGroup');
+  const subSelect = document.getElementById('uploadDocSubfolderSelect');
+  const customSubInp = document.getElementById('uploadDocCustomSubfolderInput');
+
+  if (!custSelect || !subSelect) return;
+
+  const val = custSelect.value;
+  if (val === '__custom__') {
+    if (customGroup) customGroup.style.display = 'block';
+    subSelect.innerHTML = '<option value="">📁 Root Directory</option><option value="__NEW__">+ Create / Enter New Sub-Folder...</option>';
+    return;
+  }
+
+  if (customGroup) customGroup.style.display = 'none';
+
+  let folderName = '';
+  let customerId = '';
+
+  if (val.startsWith('folder:')) {
+    folderName = val.replace('folder:', '');
+  } else if (val) {
+    customerId = val;
+    const c = state.customers.find(x => x.id === val);
+    if (c) folderName = c.folder_name;
+  }
+
+  if (!folderName && !customerId) {
+    subSelect.innerHTML = '<option value="">📁 Root (Main Customer Directory)</option><option value="__NEW__">+ Create / Enter New Sub-Folder...</option>';
+    return;
+  }
+
+  subSelect.innerHTML = '<option value="">Loading sub-folders...</option>';
+
+  try {
+    const res = await apiGet('documents', `list_subfolders&folder_name=${encodeURIComponent(folderName)}&customer_id=${encodeURIComponent(customerId)}`);
+    const subList = (res.success && res.data) ? res.data : [];
+
+    let options = '<option value="">📁 Root (Main Customer Directory)</option>';
+    subList.forEach(sf => {
+      const isSel = targetSubfolder && (sf.relative_path === targetSubfolder || sf.name === targetSubfolder);
+      options += `<option value="${escapeHtml(sf.relative_path)}" ${isSel ? 'selected' : ''}>📂 ${escapeHtml(sf.relative_path)} (${sf.total_count} files)</option>`;
+    });
+    options += '<option value="__NEW__">+ Create / Enter New Sub-Folder...</option>';
+    subSelect.innerHTML = options;
+
+    if (targetSubfolder && !subList.some(s => s.relative_path === targetSubfolder)) {
+      subSelect.value = '__NEW__';
+      if (customSubInp) {
+        customSubInp.style.display = 'block';
+        customSubInp.value = targetSubfolder;
+      }
+    }
+  } catch(e) {
+    subSelect.innerHTML = '<option value="">📁 Root (Main Customer Directory)</option><option value="__NEW__">+ Create / Enter New Sub-Folder...</option>';
+  }
+}
+
+function onUploadSubfolderSelectChanged() {
+  const sel = document.getElementById('uploadDocSubfolderSelect');
+  const customInp = document.getElementById('uploadDocCustomSubfolderInput');
+  if (sel && customInp) {
+    const isNew = sel.value === '__NEW__';
+    customInp.style.display = isNew ? 'block' : 'none';
+    if (isNew) customInp.focus();
+  }
+}
+
+async function openNewSubfolderModal(prefillCustId = '', prefillCustFolder = '', prefillParentSub = '') {
+  const form = document.getElementById('newSubfolderForm');
+  form?.reset();
+
+  const custSelect = document.getElementById('newSubfolderCustomerSelect');
+  if (custSelect) {
+    let optionsHtml = '<option value="">— Select Customer / Folder —</option>';
+    state.customers.forEach(c => {
+      const isSel = (prefillCustId && c.id === prefillCustId) || (prefillCustFolder && c.folder_name === prefillCustFolder);
+      optionsHtml += `<option value="${c.id}" ${isSel ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.folder_name)})</option>`;
+    });
+    state.folders.forEach(f => {
+      const exists = state.customers.some(c => c.folder_name === f.folder);
+      if (!exists) {
+        const isSel = prefillCustFolder && f.folder === prefillCustFolder;
+        optionsHtml += `<option value="folder:${escapeHtml(f.folder)}" ${isSel ? 'selected' : ''}>📁 ${escapeHtml(f.folder)} (Folder)</option>`;
+      }
+    });
+    custSelect.innerHTML = optionsHtml;
+  }
+
+  await onNewSubfolderCustomerChanged(prefillParentSub);
+  openModal('newSubfolderModal');
+}
+
+async function onNewSubfolderCustomerChanged(targetParentSub = '') {
+  const custSelect = document.getElementById('newSubfolderCustomerSelect');
+  const parentSelect = document.getElementById('newSubfolderParentSelect');
+  const custFolderHidden = document.getElementById('newSubfolderCustomerFolder');
+  const custIdHidden = document.getElementById('newSubfolderCustomerId');
+  const storageIdHidden = document.getElementById('newSubfolderStorageId');
+
+  if (!custSelect || !parentSelect) return;
+
+  const val = custSelect.value;
+  let folderName = '';
+  let customerId = '';
+  let storageId = '';
+
+  if (val.startsWith('folder:')) {
+    folderName = val.replace('folder:', '');
+    const fNode = state.folders.find(x => x.folder === folderName);
+    if (fNode) storageId = fNode.storage_id;
+  } else if (val) {
+    customerId = val;
+    const c = state.customers.find(x => x.id === val);
+    if (c) {
+      folderName = c.folder_name;
+      storageId = c.storage_dir_id || '';
+    }
+  }
+
+  if (custFolderHidden) custFolderHidden.value = folderName;
+  if (custIdHidden) custIdHidden.value = customerId;
+  if (storageIdHidden) storageIdHidden.value = storageId;
+
+  if (!folderName) {
+    parentSelect.innerHTML = '<option value="">📁 Root Customer Folder</option>';
+    return;
+  }
+
+  parentSelect.innerHTML = '<option value="">Loading subfolders...</option>';
+
+  try {
+    const res = await apiGet('documents', `list_subfolders&folder_name=${encodeURIComponent(folderName)}&customer_id=${encodeURIComponent(customerId)}`);
+    const subList = (res.success && res.data) ? res.data : [];
+
+    let options = '<option value="">📁 Root Customer Folder</option>';
+    subList.forEach(sf => {
+      const isSel = targetParentSub && sf.relative_path === targetParentSub;
+      options += `<option value="${escapeHtml(sf.relative_path)}" ${isSel ? 'selected' : ''}>📂 ${escapeHtml(sf.relative_path)}</option>`;
+    });
+    parentSelect.innerHTML = options;
+  } catch(e) {
+    parentSelect.innerHTML = '<option value="">📁 Root Customer Folder</option>';
+  }
+}
+
+function openRenameSubfolderModal(path, oldName) {
+  const pathInp = document.getElementById('renameSubfolderPath');
+  const oldNameInp = document.getElementById('renameSubfolderOldName');
+  const newNameInp = document.getElementById('renameSubfolderNewName');
+
+  if (pathInp) pathInp.value = path;
+  if (oldNameInp) oldNameInp.value = oldName;
+  if (newNameInp) newNameInp.value = oldName;
+
+  openModal('renameSubfolderModal');
+}
+
+async function deleteSubfolder(path, name) {
+  if (!confirm(`Delete sub-folder '${name}'?`)) return;
+
+  toast('Deleting subfolder...', 'info');
+  const res = await apiPost('documents', { path }, 'delete_subfolder');
+
+  if (res.success) {
+    toast(res.message, 'success');
+    await loadDocuments();
+  } else if (res.needs_confirm) {
+    if (confirm(res.message)) {
+      const forceRes = await apiPost('documents', { path, force: true }, 'delete_subfolder');
+      if (forceRes.success) {
+        toast(forceRes.message, 'success');
+        await loadDocuments();
+      } else {
+        toast(forceRes.message || 'Failed to delete subfolder', 'error');
+      }
+    }
+  } else {
+    toast(res.message || 'Failed to delete subfolder', 'error');
+  }
 }
 
 function previewDocument(path, name, ext) {
