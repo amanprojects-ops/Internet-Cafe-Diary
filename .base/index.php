@@ -1,8 +1,7 @@
 <?php
 /**
- * Internet Cafe Diary — Main Dashboard
+ * Internet Cafe Diary — Main Dashboard & System Manager
  * Place this file in: InternetCafeDiary/.base/index.php
- * Run via PHP built-in server or XAMPP/WAMP
  */
 
 $shopName    = 'Internet Cafe Diary';
@@ -19,9 +18,9 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Internet Cafe Diary – Customer & Session Management System">
+  <meta name="description" content="Internet Cafe Diary – Customer, Session & System Management System">
   <meta name="theme-color" content="#070b14">
-  <title><?= htmlspecialchars($shopName) ?> — Dashboard</title>
+  <title><?= htmlspecialchars($shopName) ?> — Dashboard & System Manager</title>
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,10 +43,10 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
   <!-- ── SIDEBAR ─────────────────────────────────────────────── -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
-      <div class="logo-icon">🖥️</div>
+      <div class="logo-icon" id="sidebarLogoIcon">🖥️</div>
       <div class="logo-text">
-        Internet Cafe
-        <span>Diary System</span>
+        <span id="sidebarShopTitle" style="font-size:13px;font-weight:700;display:block;color:var(--text-primary);letter-spacing:0;">Internet Cafe</span>
+        <span id="sidebarTagline">Diary System</span>
       </div>
     </div>
 
@@ -81,13 +80,20 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
         <span class="nav-icon">📈</span>
         <span>Reports</span>
       </div>
+
+      <div class="nav-section-label" style="margin-top:12px;">Administration</div>
+
+      <div class="nav-item" data-page="settings" id="nav-settings">
+        <span class="nav-icon">⚙️</span>
+        <span>System Manager</span>
+      </div>
     </nav>
 
     <div class="sidebar-footer">
       <div class="sidebar-user">
-        <div class="avatar">A</div>
+        <div class="avatar" id="sidebarUserAvatar">A</div>
         <div class="user-info">
-          <div class="name"><?= htmlspecialchars($ownerName) ?></div>
+          <div class="name" id="sidebarOwnerName"><?= htmlspecialchars($ownerName) ?></div>
           <div class="role">Administrator</div>
         </div>
       </div>
@@ -100,7 +106,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
     <!-- TOP HEADER -->
     <header class="top-header">
       <button class="btn-icon" id="menuToggle" style="display:none;" aria-label="Menu">☰</button>
-      <div class="header-title">🖥️ Internet Cafe Diary</div>
+      <div class="header-title" id="topHeaderTitle">🖥️ Internet Cafe Diary</div>
 
       <div class="header-search">
         <span class="search-icon">🔍</span>
@@ -197,6 +203,9 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
+            <select class="filter-select" id="filterCustomerDir">
+              <option value="">All Locations</option>
+            </select>
             <button class="btn btn-secondary btn-sm" onclick="loadCustomers()">🔄 Refresh</button>
           </div>
 
@@ -253,11 +262,16 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
            ════════════════════════════════════════════════════════ -->
       <section class="page" id="page-documents">
         <div class="page-header">
-          <h2>📁 Documents</h2>
-          <button class="btn btn-secondary btn-sm" onclick="loadDocuments()">🔄 Scan Folders</button>
+          <h2>📁 Documents <span>Multi-Directory Scan</span></h2>
+          <div class="flex gap-2">
+            <select class="filter-select" id="filterDocLocation" onchange="filterDocumentsByLocation()">
+              <option value="">All Storage Locations</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="loadDocuments()">🔄 Rescan</button>
+          </div>
         </div>
         <p class="text-muted text-sm mb-4">
-          Physical folders in: <code style="background:var(--bg-input);padding:2px 8px;border-radius:4px;">InternetCafeDiary/</code>
+          Dynamically scanning customer folders from all active storage directories configured in System Manager.
         </p>
         <div id="documents-grid">
           <div class="loading-overlay"><div class="spinner"></div></div>
@@ -287,6 +301,185 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
             <div class="card-header"><h3>🛠️ Services Breakdown</h3></div>
             <div class="card-body" id="service-breakdown">
               <div class="spinner"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           PAGE: SYSTEM MANAGER & SETTINGS
+           ════════════════════════════════════════════════════════ -->
+      <section class="page" id="page-settings">
+        <div class="page-header">
+          <h2>⚙️ System Manager <span>Branding, Dynamic Storage & SMTP</span></h2>
+          <button class="btn btn-secondary btn-sm" onclick="loadSettings()">🔄 Refresh Settings</button>
+        </div>
+
+        <div class="settings-tabs">
+          <div class="settings-tab active" data-tab="general">🌐 Branding & Shop Info</div>
+          <div class="settings-tab" data-tab="storage">📁 Dynamic Storage Locations</div>
+          <div class="settings-tab" data-tab="smtp">📧 Email SMTP Setup</div>
+          <div class="settings-tab" data-tab="system">ℹ️ System Status</div>
+        </div>
+
+        <!-- ── TAB 1: General Branding ────────────────────────── -->
+        <div class="settings-section active" id="tab-general">
+          <div class="card">
+            <div class="card-header">
+              <h3>🌐 Website Branding & Cafe Profile</h3>
+            </div>
+            <div class="card-body">
+              <form id="generalSettingsForm">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Cafe / Website Name <span>*</span></label>
+                    <input class="form-control" type="text" name="site_title" required placeholder="Internet Cafe Diary">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Tagline / Subtitle</label>
+                    <input class="form-control" type="text" name="tagline" placeholder="Customer & Cafe Management">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Owner / Admin Name</label>
+                    <input class="form-control" type="text" name="owner_name" placeholder="Admin Name">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Currency Symbol</label>
+                    <input class="form-control" type="text" name="currency_symbol" placeholder="₹" maxlength="5">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Contact Phone</label>
+                    <input class="form-control" type="tel" name="phone" placeholder="9876543210">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Contact Email</label>
+                    <input class="form-control" type="email" name="email" placeholder="cafe@example.com">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Shop Address</label>
+                  <input class="form-control" type="text" name="address" placeholder="Main Market Road...">
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Logo Type</label>
+                    <select class="form-control" name="logo_type" id="logoTypeSelect">
+                      <option value="icon">Emoji / Icon</option>
+                      <option value="image">Custom Image URL</option>
+                    </select>
+                  </div>
+                  <div class="form-group" id="logoIconGroup">
+                    <label class="form-label">Logo Icon / Emoji</label>
+                    <input class="form-control" type="text" name="logo_icon" placeholder="🖥️" maxlength="10">
+                  </div>
+                  <div class="form-group hidden" id="logoUrlGroup">
+                    <label class="form-label">Logo Image URL</label>
+                    <input class="form-control" type="url" name="logo_url" placeholder="https://.../logo.png">
+                  </div>
+                </div>
+                <div class="mt-4">
+                  <button type="submit" class="btn btn-primary">💾 Save Branding Settings</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB 2: Dynamic Storage Locations ────────────────── -->
+        <div class="settings-section" id="tab-storage">
+          <div class="card mb-4">
+            <div class="card-header">
+              <div>
+                <h3>📁 Dynamic Storage Directories</h3>
+                <p class="text-muted text-sm mt-4">Add and manage multiple drive locations or folders where customer files are stored.</p>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="openDirectoryModal()">➕ Add Storage Location</button>
+            </div>
+            <div class="card-body">
+              <div id="storage-directories-list">
+                <div class="loading-overlay"><div class="spinner"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB 3: Email SMTP Setup ──────────────────────────── -->
+        <div class="settings-section" id="tab-smtp">
+          <div class="card">
+            <div class="card-header">
+              <h3>📧 Email SMTP Configuration</h3>
+              <span class="badge badge-cyan">Email Notifications</span>
+            </div>
+            <div class="card-body">
+              <form id="smtpSettingsForm">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">SMTP Host <span>*</span></label>
+                    <input class="form-control font-mono" type="text" name="host" required placeholder="smtp.gmail.com">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">SMTP Port <span>*</span></label>
+                    <input class="form-control font-mono" type="number" name="port" required placeholder="587">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Encryption</label>
+                    <select class="form-control" name="encryption">
+                      <option value="tls">TLS (Port 587)</option>
+                      <option value="ssl">SSL (Port 465)</option>
+                      <option value="none">None (Port 25)</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">SMTP Status</label>
+                    <select class="form-control" name="enabled">
+                      <option value="true">Enabled</option>
+                      <option value="false">Disabled</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">SMTP Username / Email</label>
+                    <input class="form-control" type="text" name="username" placeholder="your-email@gmail.com">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">SMTP Password / App Password</label>
+                    <input class="form-control font-mono" type="password" name="password" placeholder="••••••••••••">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">From Email Address</label>
+                    <input class="form-control" type="email" name="from_email" placeholder="no-reply@yourdomain.com">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">From Name</label>
+                    <input class="form-control" type="text" name="from_name" placeholder="Internet Cafe Diary">
+                  </div>
+                </div>
+                <div class="flex gap-2 mt-4">
+                  <button type="submit" class="btn btn-primary">💾 Save SMTP Settings</button>
+                  <button type="button" class="btn btn-secondary" onclick="testSmtpConnection()">🔌 Test SMTP Connection</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB 4: System Information ───────────────────────── -->
+        <div class="settings-section" id="tab-system">
+          <div class="card mb-4">
+            <div class="card-header"><h3>ℹ️ System & Server Diagnostics</h3></div>
+            <div class="card-body">
+              <div id="system-info-content">
+                <div class="loading-overlay"><div class="spinner"></div></div>
+              </div>
             </div>
           </div>
         </div>
@@ -333,6 +526,12 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
               <option value="inactive">Inactive</option>
             </select>
           </div>
+          <div class="form-group">
+            <label class="form-label" for="inp-storage-dir">Storage Location <span>*</span></label>
+            <select id="inp-storage-dir" class="form-control" name="storage_dir_id">
+              <!-- Dynamically populated from settings -->
+            </select>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label" for="inp-notes">Notes</label>
@@ -342,6 +541,45 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeModal('customerModal')">Cancel</button>
         <button type="submit" class="btn btn-primary">💾 Save Customer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     MODAL: ADD STORAGE DIRECTORY
+     ══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="directoryModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>📁 Add Dynamic Storage Location</h3>
+      <button class="modal-close" onclick="closeModal('directoryModal')" aria-label="Close">✕</button>
+    </div>
+    <form id="directoryForm" novalidate>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Location Label / Name <span>*</span></label>
+          <input class="form-control" type="text" name="name" required placeholder="e.g. Drive D Customers, External Drive 2026...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Absolute Folder Path <span>*</span></label>
+          <input class="form-control font-mono" type="text" name="path" id="dirPathInput" required placeholder="e.g. D:\InternetCafeCustomers">
+          <small class="text-muted" style="display:block;margin-top:4px;">Enter a valid folder path on any disk or drive.</small>
+        </div>
+        <div class="form-group">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="testDirectoryPath()">🔍 Check Path</button>
+          <span id="dirTestResult" class="text-sm" style="margin-left:10px;"></span>
+        </div>
+        <div class="form-group">
+          <label class="flex items-center gap-2" style="cursor:pointer;">
+            <input type="checkbox" name="is_default" value="1">
+            <span>Set as Default Customer Storage Location</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('directoryModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">💾 Add Location</button>
       </div>
     </form>
   </div>
@@ -395,7 +633,7 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
             <input id="ses-dur" class="form-control" type="number" name="duration_min" placeholder="30" min="1">
           </div>
           <div class="form-group">
-            <label class="form-label" for="ses-amount">Amount (₹) <span>*</span></label>
+            <label class="form-label" for="ses-amount">Amount (<span class="currency-symbol">₹</span>) <span>*</span></label>
             <input id="ses-amount" class="form-control" type="number" name="amount" placeholder="0" min="0" step="0.50" required>
           </div>
         </div>
@@ -439,19 +677,6 @@ for ($y = 2020; $y <= $currentYear; $y++) $years[] = $y;
 
 <!-- Main JS -->
 <script src="Assets/js/app.js"></script>
-
-<!-- Load customer badge count -->
-<script>
-  // Update sidebar badge after load
-  (async () => {
-    try {
-      const r = await fetch('php_files/api.php?resource=customers');
-      const d = await r.json();
-      const badge = document.getElementById('badge-customers');
-      if (badge) badge.textContent = d.total || 0;
-    } catch(e) {}
-  })();
-</script>
 
 </body>
 </html>
