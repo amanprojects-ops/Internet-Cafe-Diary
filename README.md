@@ -1,6 +1,6 @@
-# 🖥️ Internet Cafe Diary — Dashboard
+# 🖥️ Internet Cafe Diary — Dashboard & System Manager
 
-A **complete Internet Cafe Management System** built with PHP, JavaScript, HTML, CSS and JSON database.
+A **complete Internet Cafe Management System** built with PHP, JavaScript, HTML, CSS, and a JSON-based database collection.
 
 ---
 
@@ -9,162 +9,108 @@ A **complete Internet Cafe Management System** built with PHP, JavaScript, HTML,
 ```
 InternetCafeDiary/
 │
-├── .base/                          ← Dashboard files (this folder)
-│   ├── index.php                   ← Main Dashboard (open this)
-│   ├── .htaccess                   ← Apache security config
+├── index.php                       ← Root entrypoint (redirects to .base)
+├── run.bat                         ← One-click runner for Windows
+├── README.md                       ← System documentation
+├── .gitignore                      ← Ignores customer files & tracks code
+│
+├── .base/                          ← Core Application & Dashboard
+│   ├── index.php                   ← Main Dashboard & System Manager UI
+│   ├── .htaccess                   ← Apache security & directory protection
 │   │
 │   ├── Assets/
 │   │   ├── css/
-│   │   │   └── style.css           ← Full dark-theme stylesheet
+│   │   │   └── style.css           ← Modern dark theme & glassmorphism
 │   │   └── js/
-│   │       └── app.js              ← Frontend logic (CRUD, Charts, etc.)
+│   │       └── app.js              ← Frontend CRUD, settings & multi-dir logic
 │   │
 │   ├── php_files/
-│   │   └── api.php                 ← CRUD REST API (JSON database)
+│   │   └── api.php                 ← REST API (CRUD, Dynamic Storage, SMTP test)
 │   │
 │   └── data/
-│       ├── customers.json          ← Customer database (JSON)
-│       └── sessions.json           ← Sessions/Visits database (JSON)
+│       ├── customers.json          ← Customers collection (JSON)
+│       ├── sessions.json           ← Visits & Sessions collection (JSON)
+│       └── settings.json           ← System Manager & Dynamic Locations config
 │
-├── CUSTOMER_NAME/                  ← Each customer's physical folder
-│   ├── document1.pdf
-│   ├── photo.jpg
-│   └── ...
-│
-└── ANOTHER_CUSTOMER/
+├── CUSTOMER_NAME/                  ← Default customer folders (on primary storage)
+└── [ANY_CUSTOM_DRIVE_OR_FOLDER]    ← Additional dynamic storage locations (D:\, E:\, etc.)
 ```
 
 ---
 
 ## 🚀 How to Run
 
-### Option 1: XAMPP / WAMP (Recommended)
-1. Copy the **entire `InternetCafeDiary`** folder to `C:\xampp\htdocs\`
-2. Start XAMPP → Apache
-3. Open browser: `http://localhost/InternetCafeDiary/.base/`
+### Method 1: One-Click Windows Runner (Easiest)
+Simply double-click **`run.bat`** in the repository root. It will:
+1. Start the PHP server at `localhost:8000`
+2. Automatically launch your default browser to `http://localhost:8000`
 
-### Option 2: PHP Built-in Server
+### Method 2: Command Line (PHP Built-in Server)
 ```bash
-cd "C:\Users\Technical Aman\Desktop\InternetCafeDiary\.base"
-php -S localhost:8080
+php -S localhost:8000
 ```
-Then open: `http://localhost:8080/`
+Then visit: `http://localhost:8000`
+
+### Method 3: XAMPP / WAMP
+1. Place the `InternetCafeDiary` folder inside `htdocs`
+2. Start Apache
+3. Visit: `http://localhost/InternetCafeDiary/`
 
 ---
 
-## 🌟 Features
+## 🌟 Key Features
 
-### 👥 Customers (CRUD)
-- ➕ **Add** new customer (auto-creates folder)
-- ✏️ **Edit** customer info
-- 🗑️ **Delete** customer
-- 🔍 **Search** by name, phone, Aadhar
-- 🔽 **Filter** by year & status (Active/Inactive)
-- 📋 **View** full customer detail with documents & visit history
+### ⚙️ System Manager (Dynamic Settings)
+- **🌐 Branding & Cafe Profile:**
+  - Dynamic Cafe Name, Tagline, Owner Name, and Contact details
+  - Custom Logo (Emoji/Icon or Custom Image URL)
+  - Currency Symbol customization (₹, $, etc.)
+- **📁 Dynamic Storage Directories:**
+  - Add **unlimited custom storage directories** across any disk or drive (e.g. `D:\Customers`, `E:\CafeBackup`)
+  - Set default storage directory for new customer folders
+  - Active/Inactive toggle per directory
+  - Real-time directory path validation & permission check
+  - Documents tab automatically scans and organizes files across **all active storage locations**
+- **📧 Email SMTP Setup:**
+  - Configure SMTP Host, Port, Encryption (TLS/SSL/None)
+  - SMTP Authentication (Username, App Password)
+  - Built-in **"Test SMTP Connection"** socket tester
+- **ℹ️ System & Disk Diagnostics:**
+  - Live PHP version, Server OS, and Memory limit
+  - Free & Total disk space for each configured storage drive
 
-### ⏱️ Sessions
-- ➕ **Log** a new customer session/visit
-- 📅 **Filter** by date, year, customer
-- 💰 Track **service type, amount, payment mode**
-- 🗑️ Delete sessions
+### 👥 Customer Management (CRUD)
+- ➕ **Add** customer with custom or default storage location
+- ✏️ **Edit** customer details (Phone, Aadhar, Address, Notes, Status)
+- 🗑️ **Delete** customer record safely
+- 🔍 **Search** by name, mobile number, or Aadhar
+- 🔽 **Filter** by Year, Status (Active/Inactive), and Storage Location
 
-### 📁 Documents
-- **Auto-scans** all physical folders in `InternetCafeDiary/`
-- Shows files per customer folder with icons by type
-- Matches physical folders to database records
+### ⏱️ Sessions & Billing
+- ➕ Log customer visits with service type, time duration, amount & payment mode (Cash, UPI, Credit, Free)
+- 📊 Track daily and yearly revenue in real time
 
-### 📈 Reports
-- 📊 **Monthly Revenue Chart** (bar chart)
-- 🛠️ **Services Breakdown** (which service is most used)
-- 📅 **Customers by Year** chart
-
----
-
-## 🗄️ JSON Database Schema
-
-### customers.json
-```json
-{
-  "customers": [
-    {
-      "id": "CUST-2024-XXXXXX",
-      "name": "CUSTOMER NAME",
-      "folder_name": "CUSTOMER_NAME",
-      "phone": "9876543210",
-      "address": "Village - ...",
-      "aadhar": "XXXX-XXXX-XXXX",
-      "created_date": "2024-01-15",
-      "created_year": "2024",
-      "status": "active",
-      "notes": "",
-      "documents": ["file1.pdf", "photo.jpg"],
-      "visits": [
-        { "date": "2024-01-15", "service": "Document Print", "amount": 20, "duration": "30min" }
-      ]
-    }
-  ]
-}
-```
-
-### sessions.json
-```json
-{
-  "sessions": [
-    {
-      "id": "SES-2024-XXXXXX",
-      "customer_id": "CUST-2024-XXXXXX",
-      "customer_name": "CUSTOMER NAME",
-      "date": "2024-01-15",
-      "year": "2024",
-      "start_time": "10:30",
-      "end_time": "11:00",
-      "duration_min": 30,
-      "service": "Document Print",
-      "amount": 20,
-      "payment_mode": "cash",
-      "notes": "Printed Aadhar"
-    }
-  ]
-}
-```
+### 📁 Multi-Directory Document Browser
+- Automatically scans physical files (`.pdf`, `.jpg`, `.docx`, etc.) across all dynamic storage paths
+- Identifies registered vs unlinked customer folders
+- Filter documents by storage drive
 
 ---
 
-## 🔌 API Endpoints
+## 🗄️ JSON Database Collections
 
-All calls go to: `php_files/api.php?resource=X`
-
-| Method | Resource    | Description              |
-|--------|-------------|--------------------------|
-| GET    | customers   | List all / search        |
-| GET    | customers&id=X | Get single customer   |
-| POST   | customers   | Create new customer      |
-| PUT    | customers&id=X | Update customer       |
-| DELETE | customers&id=X | Delete customer       |
-| GET    | sessions    | List all sessions        |
-| POST   | sessions    | Create session           |
-| DELETE | sessions&id=X | Delete session        |
-| GET    | folders     | Scan physical folders    |
-| GET    | stats       | Dashboard statistics     |
+- **`customers.json`**: Customer records with assigned `storage_dir_id` and path.
+- **`sessions.json`**: Timed internet and printing session logs.
+- **`settings.json`**: Business info, dynamic directory paths, and SMTP configurations.
 
 ---
 
-## 📦 Services Available
-Document Print, Form Fill, Browsing, Photo Print, Scanning,
-PDF Convert, Online Work, Government Form, Scholarship,
-Job Application, Aadhar Work, PAN Card, Other
+## 🎨 Technology Stack
+- **Backend:** PHP 7.4+ (Native, zero external heavy dependencies)
+- **Frontend:** Vanilla JavaScript (ES6+), HTML5, Vanilla CSS3 (Dark Glassmorphism)
+- **Charts:** Chart.js
+- **Database:** JSON Document Collections
 
 ---
 
-## 🎨 Tech Stack
-- **PHP 7.4+** — Backend & API
-- **Vanilla JavaScript** — Frontend logic
-- **HTML5** — Structure
-- **CSS3** — Dark theme with glassmorphism
-- **Chart.js** — Interactive charts
-- **Google Fonts** — Inter + JetBrains Mono
-- **JSON** — Lightweight file database
-
----
-
-*Made for Internet Cafe Management — 2026*
+*Internet Cafe Diary — 2026*
