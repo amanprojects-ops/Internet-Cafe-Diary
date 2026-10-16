@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // ──────────────────────────────────────────────
 // PATH SETUP
 // ──────────────────────────────────────────────
-define('BASE_DIR',       dirname(__DIR__));           // InternetCafeDiary root
+define('BASE_DIR',       dirname(dirname(__DIR__))); // InternetCafeDiary root
 define('DATA_DIR',       __DIR__ . '/../data/');
 define('CUSTOMERS_FILE', DATA_DIR . 'customers.json');
 define('SESSIONS_FILE',  DATA_DIR . 'sessions.json');
@@ -57,7 +57,7 @@ function sanitizeFolderName($name) {
 // Scan physical folders in InternetCafeDiary root
 function scanPhysicalFolders() {
     $rootDir  = BASE_DIR;
-    $excluded = ['.base', '.', '..'];
+    $excluded = ['.base', '.', '..', '.git'];
     $folders  = [];
     if (is_dir($rootDir)) {
         foreach (scandir($rootDir) as $item) {
