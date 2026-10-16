@@ -174,7 +174,74 @@ function getDefaultStorageDirectory() {
     ];
 }
 
-// Scan physical folders across all active storage directories
+// Scan physical folders and nested sub-folders across all active storage directories
+function scanFolderRecursive($dir, $relativeSubPath = '', $maxDepth = 6, $currentDepth = 0) {
+    if ($currentDepth >= $maxDepth) return ['files' => [], 'subfolders' => []];
+    $excluded = ['.', '..', 'desktop.ini', 'Thumbs.db', '.git'];
+    $files = [];
+    $subfolders = [];
+
+    $items = @scandir($dir) ?: [];
+    foreach ($items as $item) {
+        if (in_array($item, $excluded)) continue;
+        $fullPath = $dir . DIRECTORY_SEPARATOR . $item;
+        $rel = $relativeSubPath !== '' ? ($relativeSubPath . '/' . $item) : $item;
+
+        if (is_dir($fullPath)) {
+            $childScan = scanFolderRecursive($fullPath, $rel, $maxDepth, $currentDepth + 1);
+            $subCount = count($childScan['files']) + array_sum(array_column($childScan['subfolders'], 'total_count'));
+            $subfolders[] = [
+                'name'          => $item,
+                'relative_path' => $rel,
+                'full_path'     => $fullPath,
+                'files'         => $childScan['files'],
+                'subfolders'    => $childScan['subfolders'],
+                'file_count'    => count($childScan['files']),
+                'total_count'   => $subCount
+            ];
+        } else {
+            $files[] = [
+                'name'          => $item,
+                'subfolder'     => $relativeSubPath,
+                'relative_path' => $rel,
+                'full_path'     => $fullPath,
+                'size_bytes'    => @filesize($fullPath) ?: 0,
+                'mtime'         => @filemtime($fullPath) ?: time(),
+                'ext'           => strtolower(pathinfo($item, PATHINFO_EXTENSION))
+            ];
+        }
+    }
+    return ['files' => $files, 'subfolders' => $subfolders];
+}
+
+function flattenFolderFiles($scanResult, $customerFolder, $storageId, $storageName, $matchedCust = null) {
+    $docs = [];
+    foreach ($scanResult['files'] as $f) {
+        $docs[] = [
+            'name'           => $f['name'],
+            'folder'         => $customerFolder,
+            'subfolder'      => $f['subfolder'],
+            'relative_path'  => $f['relative_path'],
+            'customer_id'    => $matchedCust['id'] ?? null,
+            'customer_name'  => $matchedCust['name'] ?? $customerFolder,
+            'storage_id'     => $storageId,
+            'storage_name'   => $storageName,
+            'full_path'      => $f['full_path'],
+            'size_bytes'     => $f['size_bytes'],
+            'size_formatted' => formatBytes($f['size_bytes']),
+            'modified_date'  => date('Y-m-d H:i', $f['mtime']),
+            'ext'            => $f['ext']
+        ];
+    }
+    foreach ($scanResult['subfolders'] as $sf) {
+        $subDocs = flattenFolderFiles($sf, $customerFolder, $storageId, $storageName, $matchedCust);
+        foreach ($subDocs as $sd) {
+            $docs[] = $sd;
+        }
+    }
+    return $docs;
+}
+
 function scanAllDirectories() {
     $dirs = getStorageDirectories();
     $excluded = ['.base', '.', '..', '.git', 'desktop.ini'];
@@ -190,20 +257,19 @@ function scanAllDirectories() {
             if (in_array($item, $excluded)) continue;
             $fullPath = $dirPath . DIRECTORY_SEPARATOR . $item;
             if (is_dir($fullPath)) {
-                $files = [];
-                $fileItems = @scandir($fullPath) ?: [];
-                foreach ($fileItems as $f) {
-                    if (!in_array($f, ['.', '..', 'desktop.ini'])) {
-                        $files[] = $f;
-                    }
-                }
+                $scan = scanFolderRecursive($fullPath, '');
+                $directFiles = array_map(fn($f) => $f['name'], $scan['files']);
+                $subCount = count($scan['files']) + array_sum(array_column($scan['subfolders'], 'total_count'));
+
                 $results[] = [
-                    'folder'       => $item,
-                    'files'        => $files,
-                    'count'        => count($files),
-                    'storage_id'   => $dirConfig['id'],
-                    'storage_name' => $dirConfig['name'],
-                    'full_path'    => $fullPath
+                    'folder'            => $item,
+                    'files'             => $directFiles,
+                    'count'             => count($directFiles),
+                    'total_files_count' => $subCount,
+                    'subfolders'        => $scan['subfolders'],
+                    'storage_id'        => $dirConfig['id'],
+                    'storage_name'      => $dirConfig['name'],
+                    'full_path'         => $fullPath
                 ];
             }
         }
@@ -634,7 +700,7 @@ if ($resource === 'documents') {
     // 1. INLINE PREVIEW / STREAM
     if ($action === 'view') {
         $path = $_GET['path'] ?? '';
-        if (!$path || !file_exists($path) || !isPathWithinStorage($path)) {
+        if (!$path || !file_exists($path) || is_dir($path) || !isPathWithinStorage($path)) {
             http_response_code(404);
             echo "Document not found or access denied";
             exit();
@@ -650,7 +716,7 @@ if ($resource === 'documents') {
     // 2. ATTACHMENT DOWNLOAD
     if ($action === 'download') {
         $path = $_GET['path'] ?? '';
-        if (!$path || !file_exists($path) || !isPathWithinStorage($path)) {
+        if (!$path || !file_exists($path) || is_dir($path) || !isPathWithinStorage($path)) {
             http_response_code(404);
             echo "Document not found or access denied";
             exit();
@@ -663,53 +729,227 @@ if ($resource === 'documents') {
         exit();
     }
 
-    // 3. LIST ALL DOCUMENTS (DATATABLE FEED)
-    if ($method === 'GET') {
+    // 3. LIST ALL DOCUMENTS (DATATABLE FEED - RECURSIVE WITH SUB-FOLDERS)
+    if ($method === 'GET' && empty($action)) {
         $custDb = readJson(CUSTOMERS_FILE);
         $customers = $custDb['customers'] ?? [];
-        $folders = scanAllDirectories();
+        $dirs = getStorageDirectories();
+        $excluded = ['.base', '.', '..', '.git', 'desktop.ini'];
         $docsList = [];
 
-        foreach ($folders as $f) {
-            $folderName  = $f['folder'];
-            $storageId   = $f['storage_id'];
-            $storageName = $f['storage_name'];
-            $folderPath  = $f['full_path'];
+        foreach ($dirs as $dirConfig) {
+            if (!($dirConfig['is_active'] ?? true)) continue;
+            $dirPath = rtrim($dirConfig['path'], '\\/');
+            if (!is_dir($dirPath)) continue;
 
-            $matchedCust = null;
-            foreach ($customers as $c) {
-                if (($c['folder_name'] ?? '') === $folderName) {
-                    $matchedCust = $c;
-                    break;
+            $items = @scandir($dirPath) ?: [];
+            foreach ($items as $item) {
+                if (in_array($item, $excluded)) continue;
+                $fullPath = $dirPath . DIRECTORY_SEPARATOR . $item;
+                if (is_dir($fullPath)) {
+                    $matchedCust = null;
+                    foreach ($customers as $c) {
+                        if (($c['folder_name'] ?? '') === $item) {
+                            $matchedCust = $c;
+                            break;
+                        }
+                    }
+
+                    $scan = scanFolderRecursive($fullPath, '');
+                    $docs = flattenFolderFiles($scan, $item, $dirConfig['id'], $dirConfig['name'], $matchedCust);
+                    foreach ($docs as $d) {
+                        $docsList[] = $d;
+                    }
                 }
-            }
-
-            foreach ($f['files'] as $fileName) {
-                $filePath = $folderPath . DIRECTORY_SEPARATOR . $fileName;
-                $sizeBytes = @filesize($filePath) ?: 0;
-                $mtime = @filemtime($filePath) ?: time();
-                $ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-
-                $docsList[] = [
-                    'name'          => $fileName,
-                    'folder'        => $folderName,
-                    'customer_id'   => $matchedCust['id'] ?? null,
-                    'customer_name' => $matchedCust['name'] ?? $folderName,
-                    'storage_id'    => $storageId,
-                    'storage_name'  => $storageName,
-                    'full_path'     => $filePath,
-                    'size_bytes'    => $sizeBytes,
-                    'size_formatted'=> formatBytes($sizeBytes),
-                    'modified_date' => date('Y-m-d H:i', $mtime),
-                    'ext'           => $ext
-                ];
             }
         }
 
         respond(['success' => true, 'data' => $docsList, 'total' => count($docsList)]);
     }
 
-    // 4. UPLOAD DOCUMENT (CREATE)
+    // 4. LIST SUB-FOLDERS FOR CUSTOMER / FOLDER
+    if ($action === 'list_subfolders') {
+        $customerFolder = trim($_GET['folder_name'] ?? '');
+        $customerId     = trim($_GET['customer_id'] ?? '');
+        $storageDirId   = trim($_GET['storage_dir_id'] ?? '');
+
+        if ($customerId) {
+            $custDb = readJson(CUSTOMERS_FILE);
+            foreach ($custDb['customers'] as $c) {
+                if ($c['id'] === $customerId) {
+                    $customerFolder = $c['folder_name'];
+                    $storageDirId   = $c['storage_dir_id'] ?? $storageDirId;
+                    break;
+                }
+            }
+        }
+
+        $dirs = getStorageDirectories();
+        $targetDir = null;
+        if ($storageDirId) {
+            foreach ($dirs as $d) {
+                if ($d['id'] === $storageDirId) { $targetDir = $d; break; }
+            }
+        }
+        if (!$targetDir) $targetDir = getDefaultStorageDirectory();
+
+        $destDir = rtrim($targetDir['path'], '\\/') . DIRECTORY_SEPARATOR . $customerFolder;
+        if (!is_dir($destDir)) {
+            respond(['success' => true, 'data' => []]);
+        }
+
+        $scan = scanFolderRecursive($destDir, '');
+        $subfolderPaths = [];
+        $collectPaths = function($sublist) use (&$collectPaths, &$subfolderPaths) {
+            foreach ($sublist as $sf) {
+                $subfolderPaths[] = [
+                    'name'          => $sf['name'],
+                    'relative_path' => $sf['relative_path'],
+                    'full_path'     => $sf['full_path'],
+                    'file_count'    => $sf['file_count'],
+                    'total_count'   => $sf['total_count']
+                ];
+                if (!empty($sf['subfolders'])) {
+                    $collectPaths($sf['subfolders']);
+                }
+            }
+        };
+        $collectPaths($scan['subfolders']);
+
+        respond(['success' => true, 'data' => $subfolderPaths]);
+    }
+
+    // 5. CREATE SUB-FOLDER
+    if ($method === 'POST' && $action === 'create_subfolder') {
+        $customerFolder  = trim($body['customer_folder'] ?? '');
+        $parentSubfolder = trim($body['parent_subfolder'] ?? '');
+        $subfolderName   = trim($body['subfolder_name'] ?? '');
+        $storageId       = trim($body['storage_id'] ?? '');
+        $customerId      = trim($body['customer_id'] ?? '');
+
+        if ($customerId) {
+            $custDb = readJson(CUSTOMERS_FILE);
+            foreach ($custDb['customers'] as $c) {
+                if ($c['id'] === $customerId) {
+                    $customerFolder = $c['folder_name'];
+                    $storageId      = $c['storage_dir_id'] ?? $storageId;
+                    break;
+                }
+            }
+        }
+
+        if (!$customerFolder || !$subfolderName) {
+            respond(['success' => false, 'message' => 'Customer folder and subfolder name are required'], 400);
+        }
+
+        $subfolderName = sanitizeFolderName($subfolderName);
+        if (!$subfolderName) {
+            respond(['success' => false, 'message' => 'Invalid subfolder name'], 400);
+        }
+
+        $dirs = getStorageDirectories();
+        $targetDir = null;
+        if ($storageId) {
+            foreach ($dirs as $d) {
+                if ($d['id'] === $storageId) { $targetDir = $d; break; }
+            }
+        }
+        if (!$targetDir) $targetDir = getDefaultStorageDirectory();
+
+        $destDir = rtrim($targetDir['path'], '\\/') . DIRECTORY_SEPARATOR . $customerFolder;
+        if ($parentSubfolder) {
+            $cleanParent = str_replace(['..', '\\'], ['', '/'], $parentSubfolder);
+            $cleanParent = trim($cleanParent, '/');
+            if ($cleanParent) {
+                $destDir .= DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $cleanParent);
+            }
+        }
+        $newFolderPath = $destDir . DIRECTORY_SEPARATOR . $subfolderName;
+
+        if (is_dir($newFolderPath)) {
+            respond(['success' => false, 'message' => 'A subfolder with this name already exists'], 400);
+        }
+
+        if (!@mkdir($newFolderPath, 0755, true)) {
+            respond(['success' => false, 'message' => 'Failed to create subfolder. Check directory permissions.'], 500);
+        }
+
+        $relSub = ($parentSubfolder ? (trim($parentSubfolder, '/\\') . '/') : '') . $subfolderName;
+        respond([
+            'success'       => true,
+            'message'       => "Subfolder '$subfolderName' created successfully!",
+            'subfolder'     => $relSub,
+            'full_path'     => $newFolderPath
+        ]);
+    }
+
+    // 6. RENAME SUB-FOLDER
+    if ($method === 'POST' && $action === 'rename_subfolder') {
+        $oldPath = trim($body['path'] ?? '');
+        $newName = trim($body['new_name'] ?? '');
+
+        if (!$oldPath || !$newName) respond(['success' => false, 'message' => 'Path and new name required'], 400);
+        if (!is_dir($oldPath) || !isPathWithinStorage($oldPath)) {
+            respond(['success' => false, 'message' => 'Folder not found or access denied'], 404);
+        }
+
+        $newName = sanitizeFolderName($newName);
+        if (!$newName) respond(['success' => false, 'message' => 'Invalid folder name'], 400);
+
+        $parent = dirname($oldPath);
+        $newPath = $parent . DIRECTORY_SEPARATOR . $newName;
+
+        if (file_exists($newPath) && strtolower($newPath) !== strtolower($oldPath)) {
+            respond(['success' => false, 'message' => 'A folder or file with this name already exists'], 400);
+        }
+
+        if (!@rename($oldPath, $newPath)) {
+            respond(['success' => false, 'message' => 'Failed to rename folder on disk'], 500);
+        }
+
+        respond(['success' => true, 'message' => "Subfolder renamed to '$newName'", 'new_name' => $newName, 'new_path' => $newPath]);
+    }
+
+    // 7. DELETE SUB-FOLDER
+    if ($method === 'POST' && $action === 'delete_subfolder') {
+        $folderPath = trim($body['path'] ?? '');
+        if (!$folderPath || !is_dir($folderPath) || !isPathWithinStorage($folderPath)) {
+            respond(['success' => false, 'message' => 'Folder not found or access denied'], 404);
+        }
+
+        $dirs = getStorageDirectories();
+        foreach ($dirs as $d) {
+            if (realpath($folderPath) === realpath($d['path'])) {
+                respond(['success' => false, 'message' => 'Cannot delete a storage root directory'], 400);
+            }
+        }
+
+        $items = @scandir($folderPath) ?: [];
+        $filtered = array_filter($items, fn($x) => !in_array($x, ['.', '..', 'desktop.ini', 'Thumbs.db']));
+
+        $delRecursive = function($dir) use (&$delRecursive) {
+            $files = @scandir($dir) ?: [];
+            foreach ($files as $file) {
+                if ($file === '.' || $file === '..') continue;
+                $p = $dir . DIRECTORY_SEPARATOR . $file;
+                if (is_dir($p)) $delRecursive($p);
+                else @unlink($p);
+            }
+            return @rmdir($dir);
+        };
+
+        if (count($filtered) > 0 && empty($body['force'])) {
+            respond(['success' => false, 'needs_confirm' => true, 'message' => 'Subfolder contains ' . count($filtered) . ' item(s). Confirm delete?'], 409);
+        }
+
+        if ($delRecursive($folderPath)) {
+            respond(['success' => true, 'message' => 'Subfolder deleted successfully']);
+        } else {
+            respond(['success' => false, 'message' => 'Failed to delete subfolder from disk'], 500);
+        }
+    }
+
+    // 8. UPLOAD DOCUMENT (CREATE - SUPPORTS SUB-FOLDERS)
     if ($method === 'POST' && $action === 'upload') {
         if (empty($_FILES['document'])) {
             respond(['success' => false, 'message' => 'No file uploaded'], 400);
@@ -724,6 +964,7 @@ if ($resource === 'documents') {
         $customerId   = trim($_POST['customer_id'] ?? '');
         $targetDirId  = trim($_POST['storage_dir_id'] ?? '');
         $customName   = trim($_POST['custom_name'] ?? '');
+        $subfolder    = trim($_POST['subfolder'] ?? '');
 
         $custDb = readJson(CUSTOMERS_FILE);
         $matchedCustIndex = -1;
@@ -752,6 +993,14 @@ if ($resource === 'documents') {
         if (!$targetDir) $targetDir = getDefaultStorageDirectory();
 
         $destDir = rtrim($targetDir['path'], '\\/') . DIRECTORY_SEPARATOR . $targetFolder;
+        if ($subfolder) {
+            $cleanSub = str_replace(['..', '\\'], ['', '/'], $subfolder);
+            $cleanSub = trim($cleanSub, '/');
+            if ($cleanSub) {
+                $destDir .= DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $cleanSub);
+            }
+        }
+
         if (!is_dir($destDir)) {
             @mkdir($destDir, 0755, true);
         }
@@ -770,8 +1019,9 @@ if ($resource === 'documents') {
 
         // Update customer JSON documents list if matched
         if ($matchedCustIndex >= 0) {
-            if (!in_array($destFileName, $custDb['customers'][$matchedCustIndex]['documents'] ?? [])) {
-                $custDb['customers'][$matchedCustIndex]['documents'][] = $destFileName;
+            $docRecord = $subfolder ? (trim($subfolder, '/\\') . '/' . $destFileName) : $destFileName;
+            if (!in_array($docRecord, $custDb['customers'][$matchedCustIndex]['documents'] ?? [])) {
+                $custDb['customers'][$matchedCustIndex]['documents'][] = $docRecord;
                 writeJson(CUSTOMERS_FILE, $custDb);
             }
         }
@@ -780,11 +1030,12 @@ if ($resource === 'documents') {
             'success'   => true,
             'message'   => "Document '$destFileName' uploaded successfully!",
             'file_name' => $destFileName,
+            'subfolder' => $subfolder,
             'path'      => $destFilePath
         ]);
     }
 
-    // 5. RENAME DOCUMENT (UPDATE)
+    // 9. RENAME DOCUMENT (UPDATE)
     if ($method === 'POST' && $action === 'rename') {
         $oldPath = trim($body['path'] ?? '');
         $newName = trim($body['new_name'] ?? '');
@@ -814,9 +1065,13 @@ if ($resource === 'documents') {
         $custDb = readJson(CUSTOMERS_FILE);
         $custUpdated = false;
         foreach ($custDb['customers'] as &$c) {
-            if (!empty($c['documents']) && in_array($oldBaseName, $c['documents'])) {
-                $c['documents'] = array_map(fn($d) => $d === $oldBaseName ? $newName : $d, $c['documents']);
-                $custUpdated = true;
+            if (!empty($c['documents'])) {
+                foreach ($c['documents'] as &$docItem) {
+                    if (basename($docItem) === $oldBaseName) {
+                        $docItem = dirname($docItem) !== '.' ? (dirname($docItem) . '/' . $newName) : $newName;
+                        $custUpdated = true;
+                    }
+                }
             }
         }
         if ($custUpdated) writeJson(CUSTOMERS_FILE, $custDb);
@@ -824,7 +1079,7 @@ if ($resource === 'documents') {
         respond(['success' => true, 'message' => "Document renamed to '$newName'", 'new_name' => $newName, 'new_path' => $newPath]);
     }
 
-    // 6. DELETE DOCUMENT
+    // 10. DELETE DOCUMENT
     if ($method === 'POST' && $action === 'delete') {
         $filePath = trim($body['path'] ?? '');
         if (!$filePath || !file_exists($filePath) || !isPathWithinStorage($filePath)) {
@@ -839,8 +1094,8 @@ if ($resource === 'documents') {
         $custDb = readJson(CUSTOMERS_FILE);
         $custUpdated = false;
         foreach ($custDb['customers'] as &$c) {
-            if (!empty($c['documents']) && in_array($baseName, $c['documents'])) {
-                $c['documents'] = array_values(array_filter($c['documents'], fn($d) => $d !== $baseName));
+            if (!empty($c['documents'])) {
+                $c['documents'] = array_values(array_filter($c['documents'], fn($d) => basename($d) !== $baseName));
                 $custUpdated = true;
             }
         }
